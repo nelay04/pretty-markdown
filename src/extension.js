@@ -1,15 +1,51 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
-import MarkdownIt from 'markdown-it';
-import puppeteer from 'puppeteer';
-import hljs from 'highlight.js';
-
-let previewPanel: vscode.WebviewPanel | undefined;
-
-export function activate(context: vscode.ExtensionContext) {
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.activate = activate;
+exports.deactivate = deactivate;
+const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
+const markdown_it_1 = __importDefault(require("markdown-it"));
+const puppeteer_1 = __importDefault(require("puppeteer"));
+const highlight_js_1 = __importDefault(require("highlight.js"));
+let previewPanel;
+function activate(context) {
     console.log('Pretty Markdown extension is now active!');
-
     // Register preview command
     const previewCommand = vscode.commands.registerCommand('pretty-markdown.preview', () => {
         const editor = vscode.window.activeTextEditor;
@@ -17,10 +53,8 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showErrorMessage('Please open a Markdown file first!');
             return;
         }
-
         showPreview(editor.document, context);
     });
-
     // Register PDF export command
     const exportCommand = vscode.commands.registerCommand('pretty-markdown.exportPDF', async () => {
         const editor = vscode.window.activeTextEditor;
@@ -28,54 +62,41 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showErrorMessage('Please open a Markdown file first!');
             return;
         }
-
         await exportToPDF(editor.document, context);
     });
-
     // Auto-update preview on document change
     vscode.workspace.onDidChangeTextDocument(event => {
         if (previewPanel && event.document.languageId === 'markdown') {
             updatePreview(event.document, context);
         }
     });
-
     context.subscriptions.push(previewCommand, exportCommand);
 }
-
-function showPreview(document: vscode.TextDocument, context: vscode.ExtensionContext) {
+function showPreview(document, context) {
     if (previewPanel) {
         previewPanel.reveal(vscode.ViewColumn.Beside);
         updatePreview(document, context);
-    } else {
-        previewPanel = vscode.window.createWebviewPanel(
-            'prettyMarkdownPreview',
-            'Markdown Preview',
-            vscode.ViewColumn.Beside,
-            {
-                enableScripts: true,
-                localResourceRoots: [vscode.Uri.file(path.dirname(document.fileName))]
-            }
-        );
-
+    }
+    else {
+        previewPanel = vscode.window.createWebviewPanel('prettyMarkdownPreview', 'Markdown Preview', vscode.ViewColumn.Beside, {
+            enableScripts: true,
+            localResourceRoots: [vscode.Uri.file(path.dirname(document.fileName))]
+        });
         previewPanel.onDidDispose(() => {
             previewPanel = undefined;
         });
-
         updatePreview(document, context);
     }
 }
-
-function updatePreview(document: vscode.TextDocument, context: vscode.ExtensionContext) {
+function updatePreview(document, context) {
     if (!previewPanel) {
         return;
     }
-
     const html = renderMarkdown(document.getText());
     previewPanel.webview.html = getWebviewContent(html, 'Preview');
 }
-
-function escapeHtml(text: string): string {
-    const map: { [key: string]: string } = {
+function escapeHtml(text) {
+    const map = {
         '&': '&amp;',
         '<': '&lt;',
         '>': '&gt;',
@@ -84,28 +105,26 @@ function escapeHtml(text: string): string {
     };
     return text.replace(/[&<>"']/g, (m) => map[m]);
 }
-
-function renderMarkdown(markdown: string): string {
-    const md = new MarkdownIt({
+function renderMarkdown(markdown) {
+    const md = new markdown_it_1.default({
         html: true,
         linkify: true,
         typographer: true,
         highlight: (str, lang) => {
-            if (lang && hljs.getLanguage(lang)) {
+            if (lang && highlight_js_1.default.getLanguage(lang)) {
                 try {
-                    return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang }).value}</code></pre>`;
-                } catch (e) {
+                    return `<pre class="hljs"><code>${highlight_js_1.default.highlight(str, { language: lang }).value}</code></pre>`;
+                }
+                catch (e) {
                     console.error(e);
                 }
             }
             return `<pre class="hljs"><code>${escapeHtml(str)}</code></pre>`;
         }
     });
-
     return md.render(markdown);
 }
-
-function getWebviewContent(content: string, title: string): string {
+function getWebviewContent(content, title) {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -339,11 +358,9 @@ function getWebviewContent(content: string, title: string): string {
 </body>
 </html>`;
 }
-
-async function exportToPDF(document: vscode.TextDocument, context: vscode.ExtensionContext) {
+async function exportToPDF(document, context) {
     const html = renderMarkdown(document.getText());
     const fullHtml = getWebviewContent(html, path.basename(document.fileName));
-
     vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: "Exporting to PDF...",
@@ -351,25 +368,19 @@ async function exportToPDF(document: vscode.TextDocument, context: vscode.Extens
     }, async (progress) => {
         try {
             progress.report({ increment: 20, message: "Launching browser..." });
-
-            const browser = await puppeteer.launch({
+            const browser = await puppeteer_1.default.launch({
                 headless: true,
                 args: ['--no-sandbox', '--disable-setuid-sandbox']
             });
-
             progress.report({ increment: 30, message: "Rendering document..." });
-
             const page = await browser.newPage();
             await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
-
             progress.report({ increment: 30, message: "Generating PDF..." });
-
             const defaultPath = document.fileName.replace(/\.md$/, '.pdf');
             const pdfPath = await vscode.window.showSaveDialog({
                 defaultUri: vscode.Uri.file(defaultPath),
                 filters: { 'PDF': ['pdf'] }
             });
-
             if (pdfPath) {
                 await page.pdf({
                     path: pdfPath.fsPath,
@@ -382,19 +393,18 @@ async function exportToPDF(document: vscode.TextDocument, context: vscode.Extens
                     },
                     printBackground: true
                 });
-
                 progress.report({ increment: 20, message: "Done!" });
-
                 await browser.close();
-
                 vscode.window.showInformationMessage(`PDF exported successfully to ${path.basename(pdfPath.fsPath)}`);
-            } else {
+            }
+            else {
                 await browser.close();
             }
-        } catch (error) {
+        }
+        catch (error) {
             vscode.window.showErrorMessage(`Failed to export PDF: ${error}`);
         }
     });
 }
-
-export function deactivate() {}
+function deactivate() { }
+//# sourceMappingURL=extension.js.map

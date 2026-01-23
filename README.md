@@ -1,71 +1,174 @@
-# pretty-markdown README
+# Pretty Markdown
 
-This is the README for your extension "pretty-markdown". After writing up a brief description, we recommend including the following sections.
+A beautiful and feature-rich Markdown preview and PDF export extension for Visual Studio Code.
+
+![Pretty Markdown Logo](images/logo.png)
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Beautiful Preview**: Clean, professional styling with syntax highlighting
+- **PDF Export**: One-click export to high-quality PDF files
+- **Live Preview**: Real-time preview updates as you type
+- **Syntax Highlighting**: Code blocks with vibrant, readable colors
+- **Responsive Design**: Optimized for both screen and print
+- **Zero Configuration**: Works out of the box with sensible defaults
 
-For example if there is an image subfolder under your extension project workspace:
+## Quick Start
 
-\!\[feature X\]\(images/feature-x.png\)
+1. Install the extension from the VS Code Marketplace
+2. Open any `.md` file
+3. Use `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) to open the command palette
+4. Type "Pretty Markdown" and select your desired action
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Commands
+
+| Command | Description | Keyboard Shortcut |
+|---------|-------------|-------------------|
+| `Pretty Markdown: Preview` | Open live preview in side panel | `Ctrl+Shift+Q` |
+| `Pretty Markdown: Export PDF` | Export current document to PDF | `Ctrl+Shift+E` |
+
+## Usage Examples
+
+### Opening Preview
+```bash
+# Method 1: Command Palette
+Ctrl+Shift+P > "Pretty Markdown: Preview"
+
+# Method 2: Right-click context menu
+Right-click in markdown file > "Open Preview"
+```
+
+### Exporting to PDF
+```bash
+# Command Palette
+Ctrl+Shift+P > "Pretty Markdown: Export PDF"
+```
+
+## Styling Features
+
+### Code Highlighting
+Pretty Markdown supports syntax highlighting for all major programming languages:
+
+```javascript
+function hello() {
+    console.log("Beautiful syntax highlighting!");
+}
+```
+
+```python
+def greet(name):
+    print(f"Hello, {name}!")
+```
+
+```bash
+#!/bin/bash
+echo "Terminal commands look great too!"
+```
+
+### Tables
+| Feature | Status | Notes |
+|---------|---------|-------|
+| Preview | Supported | Real-time updates |
+| PDF Export | Supported | High quality output |
+| Syntax Highlighting | Supported | 190+ languages |
+| Custom Themes | Planned | Coming soon |
+
+### Blockquotes
+> Pretty Markdown makes your documentation look professional and polished, whether you're viewing it in VS Code or exporting to PDF.
+
+## Configuration
+
+Currently, Pretty Markdown works with zero configuration. Future versions will include:
+
+- Custom themes
+- Font selection
+- PDF page settings
+- Export templates
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- Visual Studio Code 1.60.0 or higher
+- Node.js (for PDF export functionality)
 
-## Extension Settings
+## Installation
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+### From VS Code Marketplace
+1. Open VS Code
+2. Go to Extensions (`Ctrl+Shift+X`)
+3. Search for "Pretty Markdown"
+4. Click Install
 
-For example:
+### From VSIX
+1. Download the `.vsix` file
+2. Open VS Code
+3. Go to Extensions (`Ctrl+Shift+X`)
+4. Click "..." → "Install from VSIX..."
+5. Select the downloaded file
 
-This extension contributes the following settings:
+## Troubleshooting
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### Preview not updating
+- Ensure you have a `.md` file open
+- Try closing and reopening the preview
+- Check that the document is saved
 
-## Known Issues
+### PDF export fails
+- Ensure you have write permissions to the target directory
+- Check that Puppeteer dependencies are installed
+- Restart VS Code if the issue persists
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+### Performance issues
+- Large markdown files (>1MB) may take longer to process
+- Consider splitting very large documents
+- Close unused preview panels
 
-## Release Notes
+## Contributing
 
-Users appreciate release notes as you update your extension.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-### 1.0.0
+### Development Setup
+```bash
+# Clone the repository
+git clone https://github.com/nelay04/pretty-markdown
 
-Initial release of ...
+# Install dependencies
+npm install
 
-### 1.0.1
+# Open in VS Code
+code .
 
-Fixed issue #.
+# Start development
+npm run watch
+```
 
-### 1.1.0
+## License
 
-Added features X, Y, and Z.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built with [markdown-it](https://github.com/markdown-it/markdown-it)
+- PDF generation powered by [Puppeteer](https://github.com/puppeteer/puppeteer)
+- Syntax highlighting by [highlight.js](https://github.com/highlightjs/highlight.js)
+
+## Stats
+
+- Stars: Help us reach 100!
+- Downloads: Be among the first!
+- Issues: Report bugs to help us improve!
+
+## Roadmap
+
+- [ ] Custom theme support
+- [ ] Export to HTML
+- [ ] Table of contents generation
+- [ ] Math equation support
+- [ ] Mermaid diagram support
+- [ ] Custom CSS injection
+- [ ] Multi-language support
 
 ---
 
-## Following extension guidelines
+**Made with ❤️ for the VS Code community**
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+*If you find Pretty Markdown useful, please consider giving it a ⭐ on GitHub!*

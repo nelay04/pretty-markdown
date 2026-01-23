@@ -1,48 +1,139 @@
 {
   "name": "pretty-markdown",
-  "displayName": "pretty-markdown",
-  "description": "Markdown document studio for VS Code - preview, style, and export beautiful, print-ready PDFs from Markdown.",
-  "version": "0.0.1",
+  "displayName": "Pretty Markdown",
+  "description": "Beautiful Markdown preview and PDF export with syntax highlighting",
+  "version": "1.0.0",
+  "publisher": "mistx",
+  "author": {
+    "name": "SnowFlake",
+    "email": "snowflake.2k04@gmail.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nelay04/pretty-markdown.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nelay04/pretty-markdown/issues"
+  },
+  "homepage": "https://github.com/nelay04/pretty-markdown",
   "engines": {
-    "vscode": "^1.108.1"
+    "vscode": "^1.60.0"
   },
   "categories": [
-    "Other"
+    "Formatters",
+    "Other",
+    "Visualization"
   ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
+  "keywords": [
+    "markdown",
+    "preview",
+    "pdf",
+    "export",
+    "syntax highlighting",
+    "documentation",
+    "pretty",
+    "beautiful",
+    "styling"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
+  "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "pretty-markdown.helloWorld",
-        "title": "Hello World"
+        "command": "pretty-markdown.preview",
+        "title": "Preview",
+        "category": "Pretty Markdown",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "pretty-markdown.exportPDF",
+        "title": "Export PDF",
+        "category": "Pretty Markdown",
+        "icon": "$(file-pdf)"
       }
-    ]
+    ],
+    "keybindings": [
+      {
+        "command": "pretty-markdown.preview",
+        "key": "ctrl+shift+q",
+        "mac": "cmd+shift+q",
+        "when": "editorLangId == markdown"
+      },
+      {
+        "command": "pretty-markdown.exportPDF",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorLangId == markdown"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "pretty-markdown.preview",
+          "when": "resourceExtname == .md",
+          "group": "navigation"
+        },
+        {
+          "command": "pretty-markdown.exportPDF",
+          "when": "resourceExtname == .md",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "pretty-markdown.preview",
+          "when": "resourceExtname == .md",
+          "group": "pretty-markdown"
+        },
+        {
+          "command": "pretty-markdown.exportPDF",
+          "when": "resourceExtname == .md",
+          "group": "pretty-markdown"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "pretty-markdown.preview",
+          "when": "editorLangId == markdown"
+        },
+        {
+          "command": "pretty-markdown.exportPDF",
+          "when": "editorLangId == markdown"
+        }
+      ]
+    }
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "npm run check-types && npm run lint && node esbuild.js",
-    "watch": "npm-run-all -p watch:*",
-    "watch:esbuild": "node esbuild.js --watch",
-    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "npm run check-types && npm run lint && node esbuild.js --production",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "check-types": "tsc --noEmit",
-    "lint": "eslint src",
-    "test": "vscode-test"
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
-    "@types/vscode": "^1.108.1",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "22.x",
-    "typescript-eslint": "^8.52.0",
-    "eslint": "^9.39.2",
-    "esbuild": "^0.27.2",
-    "npm-run-all": "^4.1.5",
-    "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "@types/node": "^16.x",
+    "@types/vscode": "^1.60.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.2.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.4",
+    "vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "highlight.js": "^11.7.0",
+    "markdown-it": "^13.0.1",
+    "puppeteer": "^19.6.0"
+  },
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#569cd6",
+    "theme": "dark"
   }
 }
