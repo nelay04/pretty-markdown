@@ -2,7 +2,7 @@
   "name": "pretty-markdown",
   "displayName": "Pretty Markdown",
   "description": "Beautiful Markdown preview and PDF export with syntax highlighting",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "mistx",
   "author": {
     "name": "Snowy",
@@ -19,6 +19,11 @@
   "homepage": "https://github.com/nelay04/pretty-markdown",
   "engines": {
     "vscode": "^1.60.0"
+  },
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#569cd6",
+    "theme": "dark"
   },
   "categories": [
     "Formatters",
@@ -39,7 +44,7 @@
   "activationEvents": [
     "onLanguage:markdown"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
@@ -52,7 +57,7 @@
         "command": "pretty-markdown.exportPDF",
         "title": "Export PDF",
         "category": "Pretty Markdown",
-        "icon": "$(file-pdf)"
+        "icon": "$(download)"
       }
     ],
     "keybindings": [
@@ -107,12 +112,17 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
+    "vscode:prepublish": "npm run package-build",
+    "compile": "npm run check-types && npm run lint",
+    "check-types": "tsc --noEmit",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package-build": "node esbuild.js --production",
+    "test": "vscode-test",
+    "pretest": "npm run compile && npm run lint",
+    "fix": "eslint src --ext ts --fix",
     "package": "vsce package",
     "publish": "vsce publish"
   },
@@ -128,12 +138,7 @@
   },
   "dependencies": {
     "highlight.js": "^11.7.0",
-    "markdown-it": "^13.0.1",
-    "puppeteer": "^19.6.0"
-  },
-  "icon": "images/icon.png",
-  "galleryBanner": {
-    "color": "#569cd6",
-    "theme": "dark"
+    "markdown-it": "^14.1.0",
+    "puppeteer": "^21.11.0"
   }
 }

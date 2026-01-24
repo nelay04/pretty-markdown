@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Math equation rendering
 - Mermaid diagram support
 
+## [1.0.1] - 24-01-2026
+
+### Changed
+- Version 1.0.1 now surfaces the shipped `media/icon.png` asset so VS Code/Marketplace display the extension's intended icon instead of the placeholder glyph.
+
 ## [1.0.0] - 24-01-2026
 
 ### Added
