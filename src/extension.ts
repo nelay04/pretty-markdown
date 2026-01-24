@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import MarkdownIt from 'markdown-it';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import { Browser, detectBrowserPlatform, resolveBuildId, install, computeExecutablePath } from '@puppeteer/browsers';
 import hljs from 'highlight.js';
 
 let previewPanel: vscode.WebviewPanel | undefined;
@@ -90,7 +91,7 @@ function renderMarkdown(markdown: string): string {
         html: true,
         linkify: true,
         typographer: true,
-        highlight: (str, lang) => {
+        highlight: (str: string, lang: string) => {
             if (lang && hljs.getLanguage(lang)) {
                 try {
                     return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang }).value}</code></pre>`;
@@ -103,6 +104,34 @@ function renderMarkdown(markdown: string): string {
     });
 
     return md.render(markdown);
+}
+
+async function getChromeExecutablePath(
+    context: vscode.ExtensionContext,
+    progress: vscode.Progress<{ message?: string; increment?: number }>
+): Promise<string> {
+    const cacheDir = path.join(context.globalStorageUri.fsPath, 'puppeteer');
+    fs.mkdirSync(cacheDir, { recursive: true });
+
+    const platform = detectBrowserPlatform();
+    if (!platform) {
+        throw new Error('Unsupported platform for Chrome download.');
+    }
+
+    const buildId = await resolveBuildId(Browser.CHROME, platform, 'stable');
+    const executablePath = computeExecutablePath({
+        browser: Browser.CHROME,
+        buildId,
+        cacheDir,
+        platform
+    });
+
+    if (!fs.existsSync(executablePath)) {
+        progress.report({ increment: 10, message: "Downloading browser (first time only)..." });
+        await install({ browser: Browser.CHROME, buildId, cacheDir, platform });
+    }
+
+    return executablePath;
 }
 
 function getWebviewContent(content: string, title: string): string {
@@ -350,11 +379,13 @@ async function exportToPDF(document: vscode.TextDocument, context: vscode.Extens
         cancellable: false
     }, async (progress) => {
         try {
-            progress.report({ increment: 20, message: "Launching browser..." });
+            progress.report({ increment: 10, message: "Preparing browser..." });
 
+            const executablePath = await getChromeExecutablePath(context, progress);
             const browser = await puppeteer.launch({
+                executablePath,
                 headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
+                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
             });
 
             progress.report({ increment: 30, message: "Rendering document..." });

@@ -14,6 +14,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Math equation rendering
 - Mermaid diagram support
 
+## [1.1.2] - 25-01-2026
+
+### Fixed
+- **PDF Export Download Path**: Chrome is now downloaded to the extension's global storage folder instead of the extension install directory. This eliminates missing `bin` and `chromium.br` errors on fresh devices.
+- Reliable, automatic browser download on first export with no manual steps required.
+
+### Changed
+- Replaced runtime install hacks with a managed download using `@puppeteer/browsers`.
+- Switched to `puppeteer-core` with explicit executable path for consistent behavior across devices.
+
+## [1.1.1] - 25-01-2026
+
+### Fixed
+- **PDF Export Browser Installation**: Fixed extension packaging issue with @sparticuz/chromium. Switched back to regular puppeteer with automatic browser download on first use.
+- Improved browser installation process with better error handling and user feedback
+- Added fallback browser installation methods for better reliability
+
+### Changed
+- Replaced `@sparticuz/chromium` with regular `puppeteer` for better extension compatibility
+- Enhanced progress messages during browser setup
+- Added automatic browser download when needed
+
+## [1.1.0] - 25-01-2026
+
+### Fixed
+- **PDF Export Now Works Out-of-the-Box**: Switched from `puppeteer` to `puppeteer-core` with `@sparticuz/chromium` bundled binary. Users no longer need to manually install Chrome - the extension works immediately after installation on any device.
+- Fixed missing browser installation requirement that was preventing PDF export on fresh installations
+
+### Changed
+- Replaced `puppeteer` dependency with `puppeteer-core` and `@sparticuz/chromium` for better cross-platform compatibility
+- Improved error handling for browser launch failures
+
 ## [1.0.1] - 24-01-2026
 
 ### Changed
