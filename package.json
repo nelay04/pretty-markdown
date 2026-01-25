@@ -2,7 +2,7 @@
   "name": "pretty-markdown",
   "displayName": "Pretty Markdown",
   "description": "Beautiful Markdown preview and PDF export with syntax highlighting",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "publisher": "mistx",
   "author": {
     "name": "Snowy",
@@ -45,6 +45,12 @@
     "onLanguage:markdown"
   ],
   "main": "./dist/extension.js",
+  "browser": "./dist/extension.web.js",
+  "extensionKind": [
+    "ui",
+    "workspace",
+    "web"
+  ],
   "contributes": {
     "commands": [
       {
@@ -141,6 +147,7 @@
   },
   "dependencies": {
     "@puppeteer/browsers": "^2.1.1",
+    "html2pdf.js": "^0.10.1",
     "highlight.js": "^11.7.0",
     "markdown-it": "^14.1.0",
     "puppeteer-core": "^21.11.0"

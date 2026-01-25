@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Math equation rendering
 - Mermaid diagram support
 
+## [1.2.0] - 25-01-2026
+
+### Added
+- Web support for PDF export on vscode.dev using a browser-side PDF download flow.
+- Web extension entry point with CSP-safe webview scripting for PDF export.
+
+### Changed
+- Documentation updated to reflect web PDF export support and behavior.
+
 ## [1.1.2] - 25-01-2026
 
 ### Fixed

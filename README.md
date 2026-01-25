@@ -8,6 +8,7 @@ A beautiful and feature-rich Markdown preview and PDF export extension for Visua
 
 - **Beautiful Preview**: Clean, professional styling with syntax highlighting
 - **PDF Export**: One-click export to high-quality PDF files
+- **Web PDF Download**: Export PDF directly in vscode.dev
 - **Live Preview**: Real-time preview updates as you type
 - **Syntax Highlighting**: Code blocks with vibrant, readable colors
 - **Responsive Design**: Optimized for both screen and print
@@ -116,6 +117,10 @@ Currently, Pretty Markdown works with zero configuration. Future versions will i
 - Ensure you have write permissions to the target directory
 - Check that Puppeteer dependencies are installed
 - Restart VS Code if the issue persists
+
+### PDF export on vscode.dev
+- Export runs in the preview webview and downloads via the browser
+- Some large documents may take longer to export in the browser
 
 ### Performance issues
 - Large markdown files (>1MB) may take longer to process
