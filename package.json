@@ -48,8 +48,7 @@
   "browser": "./dist/extension.web.js",
   "extensionKind": [
     "ui",
-    "workspace",
-    "web"
+    "workspace"
   ],
   "contributes": {
     "commands": [
@@ -121,14 +120,14 @@
     "vscode:prepublish": "npm run package-build",
     "compile": "npm run check-types && npm run lint",
     "check-types": "tsc --noEmit",
-    "lint": "eslint src --ext ts",
+    "lint": "eslint src",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package-build": "node esbuild.js --production",
     "test": "vscode-test",
     "pretest": "npm run compile && npm run lint",
-    "fix": "eslint src --ext ts --fix",
+    "fix": "eslint src --fix",
     "package": "vsce package",
     "publish": "vsce publish"
   },
