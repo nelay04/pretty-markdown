@@ -46,6 +46,8 @@
     "onCommand:pretty-markdown.preview",
     "onCommand:pretty-markdown.exportPDF",
     "onCommand:pretty-markdown.refreshFiles",
+    "onCommand:pretty-markdown.searchFiles",
+    "onCommand:pretty-markdown.showFilterInfo",
     "onView:prettyMarkdownView"
   ],
   "main": "./dist/extension.js",
@@ -90,6 +92,18 @@
         "title": "Refresh Markdown Files",
         "category": "Pretty Markdown",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "pretty-markdown.searchFiles",
+        "title": "Search Markdown Files",
+        "category": "Pretty Markdown",
+        "icon": "$(search)"
+      },
+      {
+        "command": "pretty-markdown.showFilterInfo",
+        "title": "Show Filter Details",
+        "category": "Pretty Markdown",
+        "icon": "$(filter)"
       }
     ],
     "keybindings": [
@@ -109,6 +123,21 @@
     "menus": {
       "view/item/context": [
         {
+          "command": "pretty-markdown.showFilterInfo",
+          "when": "view == prettyMarkdownView && viewItem == prettyMarkdownGroup && prettyMarkdownFilterActive",
+          "group": "inline@1"
+        },
+        {
+          "command": "pretty-markdown.searchFiles",
+          "when": "view == prettyMarkdownView && viewItem == prettyMarkdownGroup",
+          "group": "inline@2"
+        },
+        {
+          "command": "pretty-markdown.refreshFiles",
+          "when": "view == prettyMarkdownView && viewItem == prettyMarkdownGroup",
+          "group": "inline@3"
+        },
+        {
           "command": "pretty-markdown.preview",
           "when": "view == prettyMarkdownView && viewItem == prettyMarkdownActive",
           "group": "inline"
@@ -117,13 +146,6 @@
           "command": "pretty-markdown.exportPDF",
           "when": "view == prettyMarkdownView && viewItem == prettyMarkdownActive",
           "group": "inline"
-        }
-      ],
-      "view/title": [
-        {
-          "command": "pretty-markdown.refreshFiles",
-          "when": "view == prettyMarkdownView",
-          "group": "navigation"
         }
       ],
       "editor/title": [

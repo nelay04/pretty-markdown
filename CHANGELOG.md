@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0] - 06-02-2026
 
+### Added
+- **Sidebar Tree View**: New sidebar panel labeled "Markdown Files" that displays all workspace Markdown files with file count metadata
+- **Manual Refresh**: "Refresh Markdown Files" command in the view title dropdown for on-demand workspace rescanning
+- **Indexing Status**: Animated status bar indicator that shows progress while indexing Markdown files
+- **Embedded Search**: Persistent search item at the top of the tree view for real-time filtering of Markdown files
+- **Persistent Search Input**: Search input box that stays open during filtering with live tree updates as you type
+
+
 ## [1.2.0] - 25-01-2026
 
 ### Added
@@ -24,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Documentation updated to reflect web PDF export support and behavior.
+
 
 ## [1.1.2] - 25-01-2026
 
@@ -34,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Replaced runtime install hacks with a managed download using `@puppeteer/browsers`.
 - Switched to `puppeteer-core` with explicit executable path for consistent behavior across devices.
+
 
 ## [1.1.1] - 25-01-2026
 
@@ -47,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced progress messages during browser setup
 - Added automatic browser download when needed
 
+
 ## [1.1.0] - 25-01-2026
 
 ### Fixed
@@ -57,10 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replaced `puppeteer` dependency with `puppeteer-core` and `@sparticuz/chromium` for better cross-platform compatibility
 - Improved error handling for browser launch failures
 
+
 ## [1.0.1] - 24-01-2026
 
 ### Changed
 - Version 1.0.1 now surfaces the shipped `media/icon.png` asset so VS Code/Marketplace display the extension's intended icon instead of the placeholder glyph.
+
 
 ## [1.0.0] - 24-01-2026
 
@@ -104,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Minimal memory footprint
 - Fast preview updates with debounced changes
 - Optimized bundle size
+
 
 ## [0.0.1] - 23-01-2026
 

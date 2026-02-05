@@ -17,6 +17,7 @@ class PrettyMarkdownViewProvider implements vscode.TreeDataProvider<PrettyMarkdo
     private activeMarkdownPath: string | undefined;
     private groupExpanded = true;
     private markdownCount = 0;
+    private filterText = '';
 
     constructor() {}
 
@@ -28,6 +29,16 @@ class PrettyMarkdownViewProvider implements vscode.TreeDataProvider<PrettyMarkdo
         this.markdownFiles = files;
         this.markdownCount = files.length;
         this.refresh();
+    }
+
+    setFilterText(filterText: string): void {
+        this.filterText = filterText;
+        void vscode.commands.executeCommand('setContext', 'prettyMarkdownFilterActive', this.filterText.trim().length > 0);
+        this.refresh();
+    }
+
+    getFilterText(): string {
+        return this.filterText;
     }
 
     setActiveFile(uri: vscode.Uri | undefined): void {
@@ -46,13 +57,14 @@ class PrettyMarkdownViewProvider implements vscode.TreeDataProvider<PrettyMarkdo
 
     getChildren(element?: PrettyMarkdownNode): PrettyMarkdownNode[] {
         if (!element) {
+            const visibleCount = this.getVisibleCount();
             const nodes: PrettyMarkdownNode[] = [
-                new PrettyMarkdownGroupItem(this.groupExpanded, this.markdownCount)
+                new PrettyMarkdownGroupItem(this.groupExpanded, visibleCount, this.getTotalCount(), this.isFilterActive())
             ];
 
             if (!this.groupExpanded) {
                 const activeUri = this.getActiveUri();
-                if (activeUri) {
+                if (activeUri && this.isUriVisible(activeUri)) {
                     nodes.push(new PrettyMarkdownFileItem(activeUri, getMarkdownLabel(activeUri), true));
                 }
             }
@@ -61,7 +73,7 @@ class PrettyMarkdownViewProvider implements vscode.TreeDataProvider<PrettyMarkdo
         }
 
         if (element instanceof PrettyMarkdownGroupItem) {
-            return this.markdownFiles.map((uri) => {
+            return this.getVisibleFiles().map((uri) => {
                 const relativePath = getMarkdownLabel(uri);
                 const isActive = this.activeMarkdownPath === uri.fsPath;
                 return new PrettyMarkdownFileItem(uri, relativePath, isActive);
@@ -77,23 +89,53 @@ class PrettyMarkdownViewProvider implements vscode.TreeDataProvider<PrettyMarkdo
         }
         return this.markdownFiles.find((uri) => uri.fsPath === this.activeMarkdownPath);
     }
+
+    private getVisibleFiles(): vscode.Uri[] {
+        const normalized = this.filterText.trim().toLowerCase();
+        if (!normalized) {
+            return this.markdownFiles;
+        }
+        return this.markdownFiles.filter((uri) => getMarkdownLabel(uri).toLowerCase().includes(normalized));
+    }
+
+    getVisibleCount(): number {
+        return this.getVisibleFiles().length;
+    }
+
+    getTotalCount(): number {
+        return this.markdownCount;
+    }
+
+    isFilterActive(): boolean {
+        return this.filterText.trim().length > 0;
+    }
+
+    private isUriVisible(uri: vscode.Uri): boolean {
+        if (!this.filterText.trim()) {
+            return true;
+        }
+        return getMarkdownLabel(uri).toLowerCase().includes(this.filterText.trim().toLowerCase());
+    }
 }
 
 class PrettyMarkdownGroupItem extends vscode.TreeItem {
-    constructor(isExpanded: boolean, count: number) {
+    constructor(isExpanded: boolean, visibleCount: number, totalCount: number, isFiltered: boolean) {
         super('Markdown Files', isExpanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
         this.id = 'prettyMarkdownGroup';
         this.iconPath = new vscode.ThemeIcon('list-unordered');
         this.contextValue = 'prettyMarkdownGroup';
-        this.description = getCountDescription(count);
+        this.description = getCountDescription(visibleCount, totalCount, isFiltered);
     }
 }
 
-function getCountDescription(count: number): string | undefined {
-    if (count <= 0) {
+function getCountDescription(visibleCount: number, totalCount: number, isFiltered: boolean): string | undefined {
+    if (totalCount <= 0) {
         return '0 files';
     }
-    return `${count} file${count === 1 ? '' : 's'}`;
+    if (isFiltered && visibleCount !== totalCount) {
+        return `${visibleCount}/${totalCount} files`;
+    }
+    return `${totalCount} file${totalCount === 1 ? '' : 's'}`;
 }
 
 class PrettyMarkdownFileItem extends vscode.TreeItem {
@@ -129,6 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
         treeDataProvider: viewProvider,
         showCollapseAll: false
     });
+    void vscode.commands.executeCommand('setContext', 'prettyMarkdownFilterActive', false);
 
     const indexingStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     indexingStatusBar.text = '$(sync~spin) Pretty Markdown is indexing...';
@@ -213,6 +256,49 @@ export function activate(context: vscode.ExtensionContext) {
         void refreshMarkdownFiles();
     });
 
+    const searchCommand = vscode.commands.registerCommand('pretty-markdown.searchFiles', () => {
+        const inputBox = vscode.window.createInputBox();
+        inputBox.title = 'Search Markdown Files';
+        inputBox.placeholder = 'Type to filter the list';
+        inputBox.ignoreFocusOut = true;
+        inputBox.value = viewProvider.getFilterText();
+
+        inputBox.onDidChangeValue((value) => {
+            viewProvider.setFilterText(value);
+        });
+
+        inputBox.onDidAccept(() => {
+            inputBox.hide();
+        });
+
+        inputBox.onDidHide(() => {
+            if (!inputBox.value.trim()) {
+                viewProvider.setFilterText('');
+            }
+            inputBox.dispose();
+        });
+
+        inputBox.show();
+    });
+
+    const showFilterInfoCommand = vscode.commands.registerCommand('pretty-markdown.showFilterInfo', () => {
+        const filterText = viewProvider.getFilterText().trim();
+        if (!filterText) {
+            vscode.window.showInformationMessage('No filter is active.');
+            return;
+        }
+        const visibleCount = viewProvider.getVisibleCount();
+        const totalCount = viewProvider.getTotalCount();
+        vscode.window.showInformationMessage(
+            `Filter: "${filterText}" (${visibleCount}/${totalCount} files)`,
+            'Clear Filter'
+        ).then((selection) => {
+            if (selection === 'Clear Filter') {
+                viewProvider.setFilterText('');
+            }
+        });
+    });
+
     scheduleRefresh();
     updateActiveMarkdown(vscode.window.activeTextEditor);
 
@@ -226,7 +312,9 @@ export function activate(context: vscode.ExtensionContext) {
         treeCollapseWatcher,
         treeExpandWatcher,
         indexingStatusBar,
-        refreshCommand
+        refreshCommand,
+        searchCommand,
+        showFilterInfoCommand
     );
 }
 
