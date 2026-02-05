@@ -8,8 +8,160 @@ import hljs from 'highlight.js';
 
 let previewPanel: vscode.WebviewPanel | undefined;
 
+type PrettyMarkdownNode = PrettyMarkdownGroupItem | PrettyMarkdownFileItem;
+
+class PrettyMarkdownViewProvider implements vscode.TreeDataProvider<PrettyMarkdownNode> {
+    private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<PrettyMarkdownNode | undefined>();
+    readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
+    private markdownFiles: vscode.Uri[] = [];
+    private activeMarkdownPath: string | undefined;
+    private groupExpanded = true;
+    private markdownCount = 0;
+
+    constructor() {}
+
+    refresh(): void {
+        this.onDidChangeTreeDataEmitter.fire(undefined);
+    }
+
+    setFiles(files: vscode.Uri[]): void {
+        this.markdownFiles = files;
+        this.markdownCount = files.length;
+        this.refresh();
+    }
+
+    setActiveFile(uri: vscode.Uri | undefined): void {
+        this.activeMarkdownPath = uri?.fsPath;
+        this.refresh();
+    }
+
+    setGroupExpanded(isExpanded: boolean): void {
+        this.groupExpanded = isExpanded;
+        this.refresh();
+    }
+
+    getTreeItem(element: PrettyMarkdownNode): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(element?: PrettyMarkdownNode): PrettyMarkdownNode[] {
+        if (!element) {
+            const nodes: PrettyMarkdownNode[] = [
+                new PrettyMarkdownGroupItem(this.groupExpanded, this.markdownCount)
+            ];
+
+            if (!this.groupExpanded) {
+                const activeUri = this.getActiveUri();
+                if (activeUri) {
+                    nodes.push(new PrettyMarkdownFileItem(activeUri, getMarkdownLabel(activeUri), true));
+                }
+            }
+
+            return nodes;
+        }
+
+        if (element instanceof PrettyMarkdownGroupItem) {
+            return this.markdownFiles.map((uri) => {
+                const relativePath = getMarkdownLabel(uri);
+                const isActive = this.activeMarkdownPath === uri.fsPath;
+                return new PrettyMarkdownFileItem(uri, relativePath, isActive);
+            });
+        }
+
+        return [];
+    }
+
+    private getActiveUri(): vscode.Uri | undefined {
+        if (!this.activeMarkdownPath) {
+            return undefined;
+        }
+        return this.markdownFiles.find((uri) => uri.fsPath === this.activeMarkdownPath);
+    }
+}
+
+class PrettyMarkdownGroupItem extends vscode.TreeItem {
+    constructor(isExpanded: boolean, count: number) {
+        super('Markdown Files', isExpanded ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed);
+        this.id = 'prettyMarkdownGroup';
+        this.iconPath = new vscode.ThemeIcon('list-unordered');
+        this.contextValue = 'prettyMarkdownGroup';
+        this.description = getCountDescription(count);
+    }
+}
+
+function getCountDescription(count: number): string | undefined {
+    if (count <= 0) {
+        return '0 files';
+    }
+    return `${count} file${count === 1 ? '' : 's'}`;
+}
+
+class PrettyMarkdownFileItem extends vscode.TreeItem {
+    constructor(uri: vscode.Uri, label: string, isActive: boolean) {
+        super(label, vscode.TreeItemCollapsibleState.None);
+        this.resourceUri = uri;
+        this.command = {
+            command: 'vscode.open',
+            title: 'Open Markdown File',
+            arguments: [uri]
+        };
+        this.iconPath = isActive
+            ? new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'))
+            : new vscode.ThemeIcon('file-text');
+        this.contextValue = isActive ? 'prettyMarkdownActive' : 'prettyMarkdownInactive';
+        this.description = isActive ? 'selected' : undefined;
+    }
+}
+
+function getMarkdownLabel(uri: vscode.Uri): string {
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
+    if (workspaceFolder) {
+        return vscode.workspace.asRelativePath(uri, false);
+    }
+    return path.basename(uri.fsPath);
+}
+
 export function activate(context: vscode.ExtensionContext) {
     console.log('Pretty Markdown extension is now active!');
+
+    const viewProvider = new PrettyMarkdownViewProvider();
+    const treeView = vscode.window.createTreeView('prettyMarkdownView', {
+        treeDataProvider: viewProvider,
+        showCollapseAll: false
+    });
+
+    const indexingStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    indexingStatusBar.text = '$(sync~spin) Pretty Markdown is indexing...';
+    indexingStatusBar.tooltip = 'Calibrating the Markdown file catalog';
+    indexingStatusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
+    indexingStatusBar.hide();
+
+    const refreshMarkdownFiles = async () => {
+        indexingStatusBar.text = '$(sync~spin) Pretty Markdown is indexing...';
+        indexingStatusBar.show();
+        try {
+            const files = await vscode.workspace.findFiles(
+                '**/*.md',
+                '**/{node_modules,.git,dist,out,coverage}/**'
+            );
+            files.sort((a, b) => getMarkdownLabel(a).localeCompare(getMarkdownLabel(b)));
+            viewProvider.setFiles(files);
+        } finally {
+            indexingStatusBar.hide();
+        }
+    };
+
+    const scheduleRefresh = () => {
+        void refreshMarkdownFiles();
+    };
+
+    const updateActiveMarkdown = (editor: vscode.TextEditor | undefined) => {
+        if (editor?.document.languageId === 'markdown') {
+            viewProvider.setActiveFile(editor.document.uri);
+        } else {
+            viewProvider.setActiveFile(undefined);
+        }
+    };
 
     // Register preview command
     const previewCommand = vscode.commands.registerCommand('pretty-markdown.preview', () => {
@@ -40,7 +192,42 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    context.subscriptions.push(previewCommand, exportCommand);
+    const markdownWatcher = vscode.workspace.createFileSystemWatcher('**/*.md');
+    markdownWatcher.onDidCreate(scheduleRefresh);
+    markdownWatcher.onDidDelete(scheduleRefresh);
+    markdownWatcher.onDidChange(scheduleRefresh);
+
+    const workspaceFolderWatcher = vscode.workspace.onDidChangeWorkspaceFolders(scheduleRefresh);
+    const activeEditorWatcher = vscode.window.onDidChangeActiveTextEditor(updateActiveMarkdown);
+    const treeCollapseWatcher = treeView.onDidCollapseElement(event => {
+        if (event.element instanceof PrettyMarkdownGroupItem) {
+            viewProvider.setGroupExpanded(false);
+        }
+    });
+    const treeExpandWatcher = treeView.onDidExpandElement(event => {
+        if (event.element instanceof PrettyMarkdownGroupItem) {
+            viewProvider.setGroupExpanded(true);
+        }
+    });
+    const refreshCommand = vscode.commands.registerCommand('pretty-markdown.refreshFiles', () => {
+        void refreshMarkdownFiles();
+    });
+
+    scheduleRefresh();
+    updateActiveMarkdown(vscode.window.activeTextEditor);
+
+    context.subscriptions.push(
+        treeView,
+        previewCommand,
+        exportCommand,
+        markdownWatcher,
+        workspaceFolderWatcher,
+        activeEditorWatcher,
+        treeCollapseWatcher,
+        treeExpandWatcher,
+        indexingStatusBar,
+        refreshCommand
+    );
 }
 
 function showPreview(document: vscode.TextDocument, context: vscode.ExtensionContext) {

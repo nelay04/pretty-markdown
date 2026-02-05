@@ -2,7 +2,7 @@
   "name": "pretty-markdown",
   "displayName": "Pretty Markdown",
   "description": "Beautiful Markdown preview and PDF export with syntax highlighting",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "publisher": "mistx",
   "author": {
     "name": "Snowy",
@@ -42,7 +42,11 @@
     "styling"
   ],
   "activationEvents": [
-    "onLanguage:markdown"
+    "onLanguage:markdown",
+    "onCommand:pretty-markdown.preview",
+    "onCommand:pretty-markdown.exportPDF",
+    "onCommand:pretty-markdown.refreshFiles",
+    "onView:prettyMarkdownView"
   ],
   "main": "./dist/extension.js",
   "browser": "./dist/extension.web.js",
@@ -51,6 +55,23 @@
     "workspace"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "prettyMarkdown",
+          "title": "Pretty Markdown",
+          "icon": "media/icon-transparent.png"
+        }
+      ]
+    },
+    "views": {
+      "prettyMarkdown": [
+        {
+          "id": "prettyMarkdownView",
+          "name": "Pretty Markdown"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "pretty-markdown.preview",
@@ -63,6 +84,12 @@
         "title": "Export PDF",
         "category": "Pretty Markdown",
         "icon": "$(download)"
+      },
+      {
+        "command": "pretty-markdown.refreshFiles",
+        "title": "Refresh Markdown Files",
+        "category": "Pretty Markdown",
+        "icon": "$(refresh)"
       }
     ],
     "keybindings": [
@@ -80,6 +107,25 @@
       }
     ],
     "menus": {
+      "view/item/context": [
+        {
+          "command": "pretty-markdown.preview",
+          "when": "view == prettyMarkdownView && viewItem == prettyMarkdownActive",
+          "group": "inline"
+        },
+        {
+          "command": "pretty-markdown.exportPDF",
+          "when": "view == prettyMarkdownView && viewItem == prettyMarkdownActive",
+          "group": "inline"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "pretty-markdown.refreshFiles",
+          "when": "view == prettyMarkdownView",
+          "group": "navigation"
+        }
+      ],
       "editor/title": [
         {
           "command": "pretty-markdown.preview",

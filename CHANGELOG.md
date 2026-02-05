@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Math equation rendering
 - Mermaid diagram support
 
+## [1.3.0] - 06-02-2026
+
 ## [1.2.0] - 25-01-2026
 
 ### Added
