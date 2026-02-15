@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Math equation rendering
 - Mermaid diagram support
 
+## [1.4.0] - 15-02-2026
+
+### Added
+- **Action explorer**: The tree view now exposes an actions section for the active Markdown file that lists runnable commands discovered from action code blocks, action comments, or dedicated Actions sections.
+- **Action execution commands**: Added `Run Action`, `Pause/Resume Action`, `Stop Action`, and `Restart Action` commands plus a warning prompt that respects the per-file confirmation setting.
+- **Action settings page**: A new settings webview lets you toggle the confirmation dialog and surfaces a safety badge when confirmation is disabled.
+
+### Changed
+- **Action controls**: Status bar items for pausing, stopping, or restarting the active action keep the runner controls close to the editor and show only when an action is running.
+- **Action source preference**: When multiple action styles are detected in a file, a quick pick prompts you to choose which source types should appear in the view.
+
 ## [1.3.0] - 06-02-2026
 
 ### Added
