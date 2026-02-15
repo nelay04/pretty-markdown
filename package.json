@@ -20,7 +20,7 @@
   "engines": {
     "vscode": "^1.60.0"
   },
-  "icon": "media/icon-transparent.png",
+  "icon": "media/icon-transparent-vscode.png",
   "galleryBanner": {
     "color": "#569cd6",
     "theme": "dark"
@@ -47,7 +47,13 @@
     "onCommand:pretty-markdown.exportPDF",
     "onCommand:pretty-markdown.refreshFiles",
     "onCommand:pretty-markdown.searchFiles",
-    "onCommand:pretty-markdown.showFilterInfo",
+      "onCommand:pretty-markdown.showFilterInfo",
+      "onCommand:pretty-markdown.runAction",
+      "onCommand:pretty-markdown.toggleActionConfirmation",
+      "onCommand:pretty-markdown.openSettings",
+      "onCommand:pretty-markdown.toggleActionPause",
+      "onCommand:pretty-markdown.stopAction",
+      "onCommand:pretty-markdown.restartAction",
     "onView:prettyMarkdownView"
   ],
   "main": "./dist/extension.js",
@@ -104,6 +110,42 @@
         "title": "Show Filter Details",
         "category": "Pretty Markdown",
         "icon": "$(filter)"
+      },
+      {
+        "command": "pretty-markdown.runAction",
+        "title": "Run Action",
+        "category": "Pretty Markdown",
+        "icon": "$(play)"
+      },
+      {
+        "command": "pretty-markdown.toggleActionPause",
+        "title": "Pause or Resume Action",
+        "category": "Pretty Markdown",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "pretty-markdown.stopAction",
+        "title": "Stop Action",
+        "category": "Pretty Markdown",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "pretty-markdown.restartAction",
+        "title": "Restart Action",
+        "category": "Pretty Markdown",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "pretty-markdown.toggleActionConfirmation",
+        "title": "Toggle Ask Confirmation Before Action",
+        "category": "Pretty Markdown",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "pretty-markdown.openSettings",
+        "title": "Settings",
+        "category": "Pretty Markdown",
+        "icon": "$(settings-gear)"
       }
     ],
     "keybindings": [
@@ -121,6 +163,13 @@
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "pretty-markdown.openSettings",
+          "when": "view == prettyMarkdownView",
+          "group": "navigation"
+        }
+      ],
       "view/item/context": [
         {
           "command": "pretty-markdown.showFilterInfo",

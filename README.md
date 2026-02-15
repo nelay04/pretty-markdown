@@ -2,7 +2,7 @@
 
 A beautiful and feature-rich Markdown preview and PDF export extension for Visual Studio Code.
 
-![Pretty Markdown Logo](images/logo.png)
+<!-- ![Pretty Markdown Logo](images/logo.png) -->
 
 ## Features
 

@@ -1,9 +1,19 @@
 import * as vscode from 'vscode';
 import { PrettyMarkdownViewProvider } from './providers/treeViewProvider';
-import { PrettyMarkdownGroupItem } from './types';
+import { PrettyMarkdownGroupItem, PrettyMarkdownActionsGroupItem } from './types';
 import { showPreview, updatePreview, getPreviewPanel } from './services/previewManager';
 import { exportToPDF } from './services/pdfExporter';
 import { getMarkdownLabel } from './utils/helpers';
+import { MarkdownAction } from './services/actionScanner';
+import {
+    onDidChangeActionState,
+    runMarkdownAction,
+    stopMarkdownAction,
+    togglePauseMarkdownAction,
+    restartMarkdownAction,
+    handleClosedTerminal
+} from './services/actionRunner';
+import { openSettingsPage } from './services/settingsManager';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Pretty Markdown extension is now active!');
@@ -48,6 +58,24 @@ export function activate(context: vscode.ExtensionContext) {
         }
     };
 
+    const pauseActionStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    pauseActionStatus.text = '$(debug-pause) Action';
+    pauseActionStatus.tooltip = 'Pause or resume the active action';
+    pauseActionStatus.command = 'pretty-markdown.toggleActionPause';
+    pauseActionStatus.hide();
+
+    const stopActionStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    stopActionStatus.text = '$(debug-stop) Action';
+    stopActionStatus.tooltip = 'Stop the active action';
+    stopActionStatus.command = 'pretty-markdown.stopAction';
+    stopActionStatus.hide();
+
+    const restartActionStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98);
+    restartActionStatus.text = '$(debug-restart) Action';
+    restartActionStatus.tooltip = 'Restart the last action';
+    restartActionStatus.command = 'pretty-markdown.restartAction';
+    restartActionStatus.hide();
+
     // Register preview command
     const previewCommand = vscode.commands.registerCommand('pretty-markdown.preview', () => {
         const editor = vscode.window.activeTextEditor;
@@ -75,6 +103,9 @@ export function activate(context: vscode.ExtensionContext) {
         if (getPreviewPanel() && event.document.languageId === 'markdown') {
             updatePreview(event.document, context);
         }
+        if (event.document.languageId === 'markdown') {
+            viewProvider.invalidateActions(event.document.uri);
+        }
     });
 
     const markdownWatcher = vscode.workspace.createFileSystemWatcher('**/*.md');
@@ -87,11 +118,15 @@ export function activate(context: vscode.ExtensionContext) {
     const treeCollapseWatcher = treeView.onDidCollapseElement(event => {
         if (event.element instanceof PrettyMarkdownGroupItem) {
             viewProvider.setGroupExpanded(false);
+        } else if (event.element instanceof PrettyMarkdownActionsGroupItem) {
+            viewProvider.setActionsGroupExpanded(false);
         }
     });
     const treeExpandWatcher = treeView.onDidExpandElement(event => {
         if (event.element instanceof PrettyMarkdownGroupItem) {
             viewProvider.setGroupExpanded(true);
+        } else if (event.element instanceof PrettyMarkdownActionsGroupItem) {
+            viewProvider.setActionsGroupExpanded(true);
         }
     });
     const refreshCommand = vscode.commands.registerCommand('pretty-markdown.refreshFiles', () => {
@@ -141,6 +176,75 @@ export function activate(context: vscode.ExtensionContext) {
         });
     });
 
+    const runActionCommand = vscode.commands.registerCommand('pretty-markdown.runAction', (action: MarkdownAction) => {
+        if (!action) {
+            vscode.window.showErrorMessage('No action was selected to run.');
+            return;
+        }
+        const run = async () => {
+            if (viewProvider.getAskConfirmationBeforeAction()) {
+                const selection = await vscode.window.showWarningMessage(
+                    `Run this action?\n\nTitle: ${action.title}\nCommand: ${action.command}`,
+                    { modal: true },
+                    'Run Action',
+                    'Cancel'
+                );
+                if (selection !== 'Run Action') {
+                    return;
+                }
+            }
+            runMarkdownAction(action);
+        };
+        void run();
+    });
+
+    const toggleActionConfirmationCommand = vscode.commands.registerCommand('pretty-markdown.toggleActionConfirmation', async () => {
+        openSettingsPage(context, viewProvider.getAskConfirmationBeforeAction(), (enabled: boolean) => {
+            viewProvider.setAskConfirmationBeforeAction(enabled);
+        });
+    });
+
+    const openSettingsCommand = vscode.commands.registerCommand('pretty-markdown.openSettings', () => {
+        openSettingsPage(context, viewProvider.getAskConfirmationBeforeAction(), (enabled: boolean) => {
+            viewProvider.setAskConfirmationBeforeAction(enabled);
+        });
+    });
+
+    const pauseActionCommand = vscode.commands.registerCommand('pretty-markdown.toggleActionPause', () => {
+        togglePauseMarkdownAction();
+    });
+
+    const stopActionCommand = vscode.commands.registerCommand('pretty-markdown.stopAction', () => {
+        stopMarkdownAction();
+    });
+
+    const restartActionCommand = vscode.commands.registerCommand('pretty-markdown.restartAction', () => {
+        restartMarkdownAction();
+    });
+
+    const terminalCloseWatcher = vscode.window.onDidCloseTerminal(handleClosedTerminal);
+
+    const actionStateWatcher = onDidChangeActionState((state) => {
+        void vscode.commands.executeCommand('setContext', 'prettyMarkdownActionRunning', state.isRunning);
+        void vscode.commands.executeCommand('setContext', 'prettyMarkdownActionHasLast', !!state.lastAction);
+
+        if (state.isRunning) {
+            pauseActionStatus.text = state.isPaused ? '$(debug-continue) Action' : '$(debug-pause) Action';
+            pauseActionStatus.show();
+            stopActionStatus.show();
+            restartActionStatus.show();
+            return;
+        }
+
+        pauseActionStatus.hide();
+        stopActionStatus.hide();
+        if (state.lastAction) {
+            restartActionStatus.show();
+        } else {
+            restartActionStatus.hide();
+        }
+    });
+
     scheduleRefresh();
     updateActiveMarkdown(vscode.window.activeTextEditor);
 
@@ -156,7 +260,18 @@ export function activate(context: vscode.ExtensionContext) {
         indexingStatusBar,
         refreshCommand,
         searchCommand,
-        showFilterInfoCommand
+        showFilterInfoCommand,
+        runActionCommand,
+        toggleActionConfirmationCommand,
+        openSettingsCommand,
+        pauseActionCommand,
+        stopActionCommand,
+        restartActionCommand,
+        terminalCloseWatcher,
+        actionStateWatcher,
+        pauseActionStatus,
+        stopActionStatus,
+        restartActionStatus
     );
 }
 

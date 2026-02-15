@@ -33,7 +33,27 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    context.subscriptions.push(previewCommand, exportCommand);
+    const unsupportedActionCommand = vscode.commands.registerCommand('pretty-markdown.runAction', () => {
+        vscode.window.showErrorMessage('Markdown actions are not supported in the web extension.');
+    });
+    const unsupportedPauseCommand = vscode.commands.registerCommand('pretty-markdown.toggleActionPause', () => {
+        vscode.window.showErrorMessage('Markdown actions are not supported in the web extension.');
+    });
+    const unsupportedStopCommand = vscode.commands.registerCommand('pretty-markdown.stopAction', () => {
+        vscode.window.showErrorMessage('Markdown actions are not supported in the web extension.');
+    });
+    const unsupportedRestartCommand = vscode.commands.registerCommand('pretty-markdown.restartAction', () => {
+        vscode.window.showErrorMessage('Markdown actions are not supported in the web extension.');
+    });
+
+    context.subscriptions.push(
+        previewCommand,
+        exportCommand,
+        unsupportedActionCommand,
+        unsupportedPauseCommand,
+        unsupportedStopCommand,
+        unsupportedRestartCommand
+    );
 }
 
 function showPreview(document: vscode.TextDocument, context: vscode.ExtensionContext) {
