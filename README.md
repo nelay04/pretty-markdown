@@ -2,16 +2,18 @@
 
 A beautiful and feature-rich Markdown preview and PDF export extension for Visual Studio Code.
 
-![Pretty Markdown Logo](images/logo.png)
+<!-- ![Pretty Markdown Logo](images/logo.png) -->
 
 ## Features
 
 - **Beautiful Preview**: Clean, professional styling with syntax highlighting
 - **PDF Export**: One-click export to high-quality PDF files
+- **Web PDF Download**: Export PDF directly in vscode.dev
 - **Live Preview**: Real-time preview updates as you type
 - **Syntax Highlighting**: Code blocks with vibrant, readable colors
 - **Responsive Design**: Optimized for both screen and print
 - **Zero Configuration**: Works out of the box with sensible defaults
+- **Action Explorer**: Detect runnable commands in Markdown files and execute them safely from the sidebar
 
 ## Quick Start
 
@@ -26,6 +28,17 @@ A beautiful and feature-rich Markdown preview and PDF export extension for Visua
 |---------|-------------|-------------------|
 | `Pretty Markdown: Preview` | Open live preview in side panel | `Ctrl+Shift+Q` |
 | `Pretty Markdown: Export PDF` | Export current document to PDF | `Ctrl+Shift+E` |
+
+### Action Commands
+
+| Command | Description |
+|---------|-------------|
+| `Pretty Markdown: Run Action` | Execute the selected action from the sidebar actions list | |
+| `Pretty Markdown: Pause or Resume Action` | Pause the running action (suspend terminal) or resume it | |
+| `Pretty Markdown: Stop Action` | Stop the active action by sending a cancel signal | |
+| `Pretty Markdown: Restart Action` | Re-run the most recent action with the same command | |
+| `Pretty Markdown: Toggle Ask Confirmation Before Action` | Configure whether a confirmation dialog is shown before running actions | |
+| `Pretty Markdown: Settings` | Open the dedicated action settings panel | |
 
 ## Usage Examples
 
@@ -43,6 +56,16 @@ Right-click in markdown file > "Open Preview"
 # Command Palette
 Ctrl+Shift+P > "Pretty Markdown: Export PDF"
 ```
+
+## Action Execution
+
+Pretty Markdown now surfaces runnable actions inside the tree view. When you select a Markdown file that contains action code blocks, action comments, or an `Actions` section, an **Actions** group appears beneath the file entry with every discovered command. Use the `Pretty Markdown: Run Action` command (or the play icon next to the action) to execute that entry in the dedicated `Pretty Markdown Actions` terminal. The extension prompts you before running anything when confirmations are enabled and also remembers which action sources you prefer when multiple styles are detected in the same file.
+
+While an action is running, the status bar displays pause/resume, stop, and restart controls so you can manage the terminal without switching windows. The runner also keeps track of the last action so the `Restart Action` command can re-run the latest command quickly.
+
+## Action Settings
+
+Open `Pretty Markdown: Settings` (or `Toggle Ask Confirmation Before Action`) to view the standalone settings panel. The checkbox controls whether the extension asks for confirmation before launching actions and displays a safety badge when confirmation is turned off. Disabling the prompt is possible, but the panel reminds you that keeping it enabled helps prevent accidental destructive commands.
 
 ## Styling Features
 
@@ -116,6 +139,10 @@ Currently, Pretty Markdown works with zero configuration. Future versions will i
 - Ensure you have write permissions to the target directory
 - Check that Puppeteer dependencies are installed
 - Restart VS Code if the issue persists
+
+### PDF export on vscode.dev
+- Export runs in the preview webview and downloads via the browser
+- Some large documents may take longer to export in the browser
 
 ### Performance issues
 - Large markdown files (>1MB) may take longer to process

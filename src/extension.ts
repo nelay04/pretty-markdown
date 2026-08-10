@@ -1,15 +1,80 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
-import MarkdownIt from 'markdown-it';
-import puppeteer from 'puppeteer-core';
-import { Browser, detectBrowserPlatform, resolveBuildId, install, computeExecutablePath } from '@puppeteer/browsers';
-import hljs from 'highlight.js';
-
-let previewPanel: vscode.WebviewPanel | undefined;
+import { PrettyMarkdownViewProvider } from './providers/treeViewProvider';
+import { PrettyMarkdownGroupItem, PrettyMarkdownActionsGroupItem } from './types';
+import { showPreview, updatePreview, getPreviewPanel } from './services/previewManager';
+import { exportToPDF } from './services/pdfExporter';
+import { getMarkdownLabel } from './utils/helpers';
+import { MarkdownAction } from './services/actionScanner';
+import {
+    onDidChangeActionState,
+    runMarkdownAction,
+    stopMarkdownAction,
+    togglePauseMarkdownAction,
+    restartMarkdownAction,
+    handleClosedTerminal
+} from './services/actionRunner';
+import { openSettingsPage } from './services/settingsManager';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Pretty Markdown extension is now active!');
+
+    const viewProvider = new PrettyMarkdownViewProvider();
+    const treeView = vscode.window.createTreeView('prettyMarkdownView', {
+        treeDataProvider: viewProvider,
+        showCollapseAll: false
+    });
+    void vscode.commands.executeCommand('setContext', 'prettyMarkdownFilterActive', false);
+
+    const indexingStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    indexingStatusBar.text = '$(sync~spin) Pretty Markdown is indexing...';
+    indexingStatusBar.tooltip = 'Calibrating the Markdown file catalog';
+    indexingStatusBar.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
+    indexingStatusBar.hide();
+
+    const refreshMarkdownFiles = async () => {
+        indexingStatusBar.text = '$(sync~spin) Pretty Markdown is indexing...';
+        indexingStatusBar.show();
+        try {
+            const files = await vscode.workspace.findFiles(
+                '**/*.md',
+                '**/{node_modules,.git,dist,out,coverage}/**'
+            );
+            files.sort((a, b) => getMarkdownLabel(a).localeCompare(getMarkdownLabel(b)));
+            viewProvider.setFiles(files);
+        } finally {
+            indexingStatusBar.hide();
+        }
+    };
+
+    const scheduleRefresh = () => {
+        void refreshMarkdownFiles();
+    };
+
+    const updateActiveMarkdown = (editor: vscode.TextEditor | undefined) => {
+        if (editor?.document.languageId === 'markdown') {
+            viewProvider.setActiveFile(editor.document.uri);
+        } else {
+            viewProvider.setActiveFile(undefined);
+        }
+    };
+
+    const pauseActionStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    pauseActionStatus.text = '$(debug-pause) Action';
+    pauseActionStatus.tooltip = 'Pause or resume the active action';
+    pauseActionStatus.command = 'pretty-markdown.toggleActionPause';
+    pauseActionStatus.hide();
+
+    const stopActionStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    stopActionStatus.text = '$(debug-stop) Action';
+    stopActionStatus.tooltip = 'Stop the active action';
+    stopActionStatus.command = 'pretty-markdown.stopAction';
+    stopActionStatus.hide();
+
+    const restartActionStatus = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98);
+    restartActionStatus.text = '$(debug-restart) Action';
+    restartActionStatus.tooltip = 'Restart the last action';
+    restartActionStatus.command = 'pretty-markdown.restartAction';
+    restartActionStatus.hide();
 
     // Register preview command
     const previewCommand = vscode.commands.registerCommand('pretty-markdown.preview', () => {
@@ -35,397 +100,179 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Auto-update preview on document change
     vscode.workspace.onDidChangeTextDocument(event => {
-        if (previewPanel && event.document.languageId === 'markdown') {
+        if (getPreviewPanel() && event.document.languageId === 'markdown') {
             updatePreview(event.document, context);
         }
+        if (event.document.languageId === 'markdown') {
+            viewProvider.invalidateActions(event.document.uri);
+        }
     });
 
-    context.subscriptions.push(previewCommand, exportCommand);
-}
+    const markdownWatcher = vscode.workspace.createFileSystemWatcher('**/*.md');
+    markdownWatcher.onDidCreate(scheduleRefresh);
+    markdownWatcher.onDidDelete(scheduleRefresh);
+    markdownWatcher.onDidChange(scheduleRefresh);
 
-function showPreview(document: vscode.TextDocument, context: vscode.ExtensionContext) {
-    if (previewPanel) {
-        previewPanel.reveal(vscode.ViewColumn.Beside);
-        updatePreview(document, context);
-    } else {
-        previewPanel = vscode.window.createWebviewPanel(
-            'prettyMarkdownPreview',
-            'Markdown Preview',
-            vscode.ViewColumn.Beside,
-            {
-                enableScripts: true,
-                localResourceRoots: [vscode.Uri.file(path.dirname(document.fileName))]
-            }
-        );
+    const workspaceFolderWatcher = vscode.workspace.onDidChangeWorkspaceFolders(scheduleRefresh);
+    const activeEditorWatcher = vscode.window.onDidChangeActiveTextEditor(updateActiveMarkdown);
+    const treeCollapseWatcher = treeView.onDidCollapseElement(event => {
+        if (event.element instanceof PrettyMarkdownGroupItem) {
+            viewProvider.setGroupExpanded(false);
+        } else if (event.element instanceof PrettyMarkdownActionsGroupItem) {
+            viewProvider.setActionsGroupExpanded(false);
+        }
+    });
+    const treeExpandWatcher = treeView.onDidExpandElement(event => {
+        if (event.element instanceof PrettyMarkdownGroupItem) {
+            viewProvider.setGroupExpanded(true);
+        } else if (event.element instanceof PrettyMarkdownActionsGroupItem) {
+            viewProvider.setActionsGroupExpanded(true);
+        }
+    });
+    const refreshCommand = vscode.commands.registerCommand('pretty-markdown.refreshFiles', () => {
+        void refreshMarkdownFiles();
+    });
 
-        previewPanel.onDidDispose(() => {
-            previewPanel = undefined;
+    const searchCommand = vscode.commands.registerCommand('pretty-markdown.searchFiles', () => {
+        const inputBox = vscode.window.createInputBox();
+        inputBox.title = 'Search Markdown Files';
+        inputBox.placeholder = 'Type to filter the list';
+        inputBox.ignoreFocusOut = true;
+        inputBox.value = viewProvider.getFilterText();
+
+        inputBox.onDidChangeValue((value) => {
+            viewProvider.setFilterText(value);
         });
 
-        updatePreview(document, context);
-    }
-}
+        inputBox.onDidAccept(() => {
+            inputBox.hide();
+        });
 
-function updatePreview(document: vscode.TextDocument, context: vscode.ExtensionContext) {
-    if (!previewPanel) {
-        return;
-    }
+        inputBox.onDidHide(() => {
+            if (!inputBox.value.trim()) {
+                viewProvider.setFilterText('');
+            }
+            inputBox.dispose();
+        });
 
-    const html = renderMarkdown(document.getText());
-    previewPanel.webview.html = getWebviewContent(html, 'Preview');
-}
+        inputBox.show();
+    });
 
-function escapeHtml(text: string): string {
-    const map: { [key: string]: string } = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-    };
-    return text.replace(/[&<>"']/g, (m) => map[m]);
-}
+    const showFilterInfoCommand = vscode.commands.registerCommand('pretty-markdown.showFilterInfo', () => {
+        const filterText = viewProvider.getFilterText().trim();
+        if (!filterText) {
+            vscode.window.showInformationMessage('No filter is active.');
+            return;
+        }
+        const visibleCount = viewProvider.getVisibleCount();
+        const totalCount = viewProvider.getTotalCount();
+        vscode.window.showInformationMessage(
+            `Filter: "${filterText}" (${visibleCount}/${totalCount} files)`,
+            'Clear Filter'
+        ).then((selection) => {
+            if (selection === 'Clear Filter') {
+                viewProvider.setFilterText('');
+            }
+        });
+    });
 
-function renderMarkdown(markdown: string): string {
-    const md = new MarkdownIt({
-        html: true,
-        linkify: true,
-        typographer: true,
-        highlight: (str: string, lang: string) => {
-            if (lang && hljs.getLanguage(lang)) {
-                try {
-                    return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang }).value}</code></pre>`;
-                } catch (e) {
-                    console.error(e);
+    const runActionCommand = vscode.commands.registerCommand('pretty-markdown.runAction', (action: MarkdownAction) => {
+        if (!action) {
+            vscode.window.showErrorMessage('No action was selected to run.');
+            return;
+        }
+        const run = async () => {
+            if (viewProvider.getAskConfirmationBeforeAction()) {
+                const selection = await vscode.window.showWarningMessage(
+                    `Run this action?\n\nTitle: ${action.title}\nCommand: ${action.command}`,
+                    { modal: true },
+                    'Run Action',
+                    'Cancel'
+                );
+                if (selection !== 'Run Action') {
+                    return;
                 }
             }
-            return `<pre class="hljs"><code>${escapeHtml(str)}</code></pre>`;
+            runMarkdownAction(action);
+        };
+        void run();
+    });
+
+    const toggleActionConfirmationCommand = vscode.commands.registerCommand('pretty-markdown.toggleActionConfirmation', async () => {
+        openSettingsPage(context, viewProvider.getAskConfirmationBeforeAction(), (enabled: boolean) => {
+            viewProvider.setAskConfirmationBeforeAction(enabled);
+        });
+    });
+
+    const openSettingsCommand = vscode.commands.registerCommand('pretty-markdown.openSettings', () => {
+        openSettingsPage(context, viewProvider.getAskConfirmationBeforeAction(), (enabled: boolean) => {
+            viewProvider.setAskConfirmationBeforeAction(enabled);
+        });
+    });
+
+    const pauseActionCommand = vscode.commands.registerCommand('pretty-markdown.toggleActionPause', () => {
+        togglePauseMarkdownAction();
+    });
+
+    const stopActionCommand = vscode.commands.registerCommand('pretty-markdown.stopAction', () => {
+        stopMarkdownAction();
+    });
+
+    const restartActionCommand = vscode.commands.registerCommand('pretty-markdown.restartAction', () => {
+        restartMarkdownAction();
+    });
+
+    const terminalCloseWatcher = vscode.window.onDidCloseTerminal(handleClosedTerminal);
+
+    const actionStateWatcher = onDidChangeActionState((state) => {
+        void vscode.commands.executeCommand('setContext', 'prettyMarkdownActionRunning', state.isRunning);
+        void vscode.commands.executeCommand('setContext', 'prettyMarkdownActionHasLast', !!state.lastAction);
+
+        if (state.isRunning) {
+            pauseActionStatus.text = state.isPaused ? '$(debug-continue) Action' : '$(debug-pause) Action';
+            pauseActionStatus.show();
+            stopActionStatus.show();
+            restartActionStatus.show();
+            return;
+        }
+
+        pauseActionStatus.hide();
+        stopActionStatus.hide();
+        if (state.lastAction) {
+            restartActionStatus.show();
+        } else {
+            restartActionStatus.hide();
         }
     });
 
-    return md.render(markdown);
-}
+    scheduleRefresh();
+    updateActiveMarkdown(vscode.window.activeTextEditor);
 
-async function getChromeExecutablePath(
-    context: vscode.ExtensionContext,
-    progress: vscode.Progress<{ message?: string; increment?: number }>
-): Promise<string> {
-    const cacheDir = path.join(context.globalStorageUri.fsPath, 'puppeteer');
-    fs.mkdirSync(cacheDir, { recursive: true });
-
-    const platform = detectBrowserPlatform();
-    if (!platform) {
-        throw new Error('Unsupported platform for Chrome download.');
-    }
-
-    const buildId = await resolveBuildId(Browser.CHROME, platform, 'stable');
-    const executablePath = computeExecutablePath({
-        browser: Browser.CHROME,
-        buildId,
-        cacheDir,
-        platform
-    });
-
-    if (!fs.existsSync(executablePath)) {
-        progress.report({ increment: 10, message: "Downloading browser (first time only)..." });
-        await install({ browser: Browser.CHROME, buildId, cacheDir, platform });
-    }
-
-    return executablePath;
-}
-
-function getWebviewContent(content: string, title: string): string {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${title}</title>
-    <style>
-        /* Pretty Markdown Color Palette */
-        :root {
-            --pretty-black: #000000;
-            --pretty-dark-blue: #0000AA;
-            --pretty-dark-green: #007c2b;
-            --pretty-dark-cyan: #00AAAA;
-            --pretty-dark-red: #AA0000;
-            --pretty-dark-magenta: #AA00AA;
-            --pretty-brown: #AA5500;
-            --pretty-light-gray: #AAAAAA;
-            --pretty-dark-gray: #555555;
-            --pretty-blue: #5555FF;
-            --pretty-green: #569cd6;
-            --pretty-cyan: #ce9178;
-            --pretty-red: #FF5555;
-            --pretty-magenta: #ff3dff;
-            --pretty-yellow: #f19130;
-            --pretty-white: #FFFFFF;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-            line-height: 1.5;
-            color: #1a1a1a;
-            background: #ffffff;
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-            font-size: 14px;
-        }
-        
-        /* Headings - Monochromatic */
-        h1, h2,h3,h4,h5,h6 {
-            margin: 16px 0 8px;
-            font-weight: 500;
-            line-height: 1.3;
-            color: #000000;
-        }
-        
-        h1 {
-            font-size: 1.75em;
-            border-bottom: 1px solid #cccccc;
-            padding-bottom: 6px;
-            margin-bottom: 16px;
-        }
-        
-        h2 {
-            font-size: 1.5em;
-        }
-        
-        h3 { 
-            font-size: 1.25em;
-        }
-        
-        h4 { 
-            font-size: 1.1em;
-        }
-        
-        h5, h6 {
-            font-size: 1em;
-        }
-        
-        /* Text elements */
-        p {
-            margin: 8px 0;
-            text-align: left;
-        }
-        
-        a {
-            color: #333333;
-            text-decoration: none;
-            border-bottom: 1px solid #999999;
-        }
-        
-        a:hover {
-            color: #000000;
-            border-bottom: 1px solid #333333;
-        }
-        
-        /* Inline code */
-        code {
-            background: #f5f7f9;
-            padding: 2px 4px;
-            border-radius: 2px;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 0.85em;
-            color: var(--pretty-dark-red);
-        }
-        
-        /* Code blocks */
-        pre {
-            background: #f5f7f9;
-            color: #1a1a1a;
-            padding: 12px;
-            border-radius: 3px;
-            overflow-x: auto;
-            margin: 12px 0;
-            border: 1px solid #d0d8e0;
-            font-size: 0.85em;
-            line-height: 1.4;
-        }
-        
-        pre code {
-            background: transparent;
-            padding: 0;
-            color: inherit;
-            border: none;
-        }
-        
-        /* Syntax highlighting with Pretty Markdown colors */
-        .hljs-keyword { color: var(--pretty-yellow); }
-        .hljs-string { color: var(--pretty-green); }
-        .hljs-comment { color: var(--pretty-dark-gray); }
-        .hljs-number { color: var(--pretty-cyan); }
-        .hljs-built_in { color: var(--pretty-magenta); }
-        .hljs-variable { color: var(--pretty-blue); }
-        .hljs-title { color: var(--pretty-red); }
-        .hljs-attr { color: var(--pretty-dark-cyan); }
-        .hljs-selector-tag { color: var(--pretty-yellow); }
-        .hljs-selector-id { color: var(--pretty-green); }
-        .hljs-selector-class { color: var(--pretty-cyan); }
-        .hljs-literal { color: var(--pretty-magenta); }
-        .hljs-function { color: var(--pretty-blue); }
-        .hljs-punctuation { color: var(--pretty-light-gray); }
-        
-        /* Blockquotes */
-        blockquote {
-            border-left: 3px solid #666666;
-            padding-left: 12px;
-            margin: 12px 0;
-            color: #555555;
-            font-style: italic;
-            background: #f9f9f9;
-            padding: 8px 12px;
-        }
-        
-        /* Lists */
-        ul, ol {
-            margin: 8px 0;
-            padding-left: 20px;
-        }
-        
-        li {
-            margin: 4px 0;
-        }
-        
-        /* Tables */
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin: 12px 0;
-            background: #ffffff;
-            border: 1px solid #cccccc;
-            font-size: 0.9em;
-        }
-        
-        th, td {
-            border: 1px solid #cccccc;
-            padding: 6px 8px;
-            text-align: left;
-        }
-        
-        th {
-            background: #f5f5f5;
-            font-weight: 500;
-            color: #000000;
-        }
-        
-        tr:nth-child(even) {
-            background: #fafafa;
-        }
-        
-        /* Images */
-        img {
-            max-width: 100%;
-            height: auto;
-            margin: 12px 0;
-        }
-        
-        /* Horizontal rule */
-        hr {
-            border: none;
-            border-top: 1px solid #cccccc;
-            margin: 16px 0;
-        }
-        
-        /* Compact spacing adjustments */
-        h1 + p, h2 + p, h3 + p, h4 + p, h5 + p, h6 + p {
-            margin-top: 4px;
-        }
-        
-        /* Print styles for clean PDF export */
-        @media print {
-            body {
-                padding: 5mm;
-                font-size: 11pt;
-                line-height: 1.4;
-            }
-            
-            h1, h2, h3, h4, h5, h6 {
-                margin: 12pt 0 6pt;
-                page-break-after: avoid;
-            }
-            
-            p, li {
-                margin: 4pt 0;
-            }
-            
-            pre {
-                page-break-inside: avoid;
-                font-size: 9pt;
-            }
-        }
-    </style>
-</head>
-<body>
-    ${content}
-</body>
-</html>`;
-}
-
-async function exportToPDF(document: vscode.TextDocument, context: vscode.ExtensionContext) {
-    const html = renderMarkdown(document.getText());
-    const fullHtml = getWebviewContent(html, path.basename(document.fileName));
-
-    vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: "Exporting to PDF...",
-        cancellable: false
-    }, async (progress) => {
-        try {
-            progress.report({ increment: 10, message: "Preparing browser..." });
-
-            const executablePath = await getChromeExecutablePath(context, progress);
-            const browser = await puppeteer.launch({
-                executablePath,
-                headless: true,
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-            });
-
-            progress.report({ increment: 30, message: "Rendering document..." });
-
-            const page = await browser.newPage();
-            await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
-
-            progress.report({ increment: 30, message: "Generating PDF..." });
-
-            const defaultPath = document.fileName.replace(/\.md$/, '.pdf');
-            const pdfPath = await vscode.window.showSaveDialog({
-                defaultUri: vscode.Uri.file(defaultPath),
-                filters: { 'PDF': ['pdf'] }
-            });
-
-            if (pdfPath) {
-                await page.pdf({
-                    path: pdfPath.fsPath,
-                    format: 'A4',
-                    margin: {
-                        top: '10mm',
-                        right: '10mm',
-                        bottom: '10mm',
-                        left: '10mm'
-                    },
-                    printBackground: true
-                });
-
-                progress.report({ increment: 20, message: "Done!" });
-
-                await browser.close();
-
-                vscode.window.showInformationMessage(`PDF exported successfully to ${path.basename(pdfPath.fsPath)}`);
-            } else {
-                await browser.close();
-            }
-        } catch (error) {
-            vscode.window.showErrorMessage(`Failed to export PDF: ${error}`);
-        }
-    });
+    context.subscriptions.push(
+        treeView,
+        previewCommand,
+        exportCommand,
+        markdownWatcher,
+        workspaceFolderWatcher,
+        activeEditorWatcher,
+        treeCollapseWatcher,
+        treeExpandWatcher,
+        indexingStatusBar,
+        refreshCommand,
+        searchCommand,
+        showFilterInfoCommand,
+        runActionCommand,
+        toggleActionConfirmationCommand,
+        openSettingsCommand,
+        pauseActionCommand,
+        stopActionCommand,
+        restartActionCommand,
+        terminalCloseWatcher,
+        actionStateWatcher,
+        pauseActionStatus,
+        stopActionStatus,
+        restartActionStatus
+    );
 }
 
 export function deactivate() {}
