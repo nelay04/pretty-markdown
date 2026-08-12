@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { PrettyMarkdownViewProvider } from './providers/treeViewProvider';
 import { PrettyMarkdownGroupItem, PrettyMarkdownActionsGroupItem } from './types';
 import { showPreview, updatePreview, getPreviewPanel } from './services/previewManager';
-import { exportToPDF } from './services/pdfExporter';
+import { exportToPDF, cleanupLegacyBrowserCache } from './services/pdfExporter';
 import { getMarkdownLabel } from './utils/helpers';
 import { MarkdownAction } from './services/actionScanner';
 import {
@@ -17,6 +17,8 @@ import { openSettingsPage } from './services/settingsManager';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Pretty Markdown extension is now active!');
+
+    cleanupLegacyBrowserCache(context);
 
     const viewProvider = new PrettyMarkdownViewProvider();
     const treeView = vscode.window.createTreeView('prettyMarkdownView', {

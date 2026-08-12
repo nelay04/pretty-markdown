@@ -47,13 +47,13 @@
     "onCommand:pretty-markdown.exportPDF",
     "onCommand:pretty-markdown.refreshFiles",
     "onCommand:pretty-markdown.searchFiles",
-      "onCommand:pretty-markdown.showFilterInfo",
-      "onCommand:pretty-markdown.runAction",
-      "onCommand:pretty-markdown.toggleActionConfirmation",
-      "onCommand:pretty-markdown.openSettings",
-      "onCommand:pretty-markdown.toggleActionPause",
-      "onCommand:pretty-markdown.stopAction",
-      "onCommand:pretty-markdown.restartAction",
+    "onCommand:pretty-markdown.showFilterInfo",
+    "onCommand:pretty-markdown.runAction",
+    "onCommand:pretty-markdown.toggleActionConfirmation",
+    "onCommand:pretty-markdown.openSettings",
+    "onCommand:pretty-markdown.toggleActionPause",
+    "onCommand:pretty-markdown.stopAction",
+    "onCommand:pretty-markdown.restartAction",
     "onView:prettyMarkdownView"
   ],
   "main": "./dist/extension.js",
@@ -255,18 +255,24 @@
     "@types/vscode": "^1.60.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
-    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^2.2.0",
+    "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.27.2",
     "eslint": "^8.28.0",
-    "typescript": "^4.9.4",
-    "vsce": "^2.15.0"
+    "typescript": "^4.9.4"
   },
   "dependencies": {
-    "@puppeteer/browsers": "^2.1.1",
+    "@puppeteer/browsers": "^2.13.2",
     "highlight.js": "^11.7.0",
-    "html2pdf.js": "^0.10.1",
+    "html2pdf.js": "^0.14.0",
     "markdown-it": "^14.1.0",
     "puppeteer-core": "^21.11.0"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.1.0",
+    "tar-fs": "^3.1.1",
+    "ws": "^8.21.0"
   }
 }

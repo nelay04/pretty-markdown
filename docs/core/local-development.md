@@ -95,15 +95,41 @@ Changes to `package.json` — new commands, menus, keybindings, activation event
 
 ## 5. PDF export in development
 
-`src/services/pdfExporter.ts` uses `puppeteer-core`, which ships **no** browser. On the first export the extension resolves the current stable Chrome build and downloads it into:
+There are two export engines. Chrome is preferred because it produces a real vector PDF with selectable text; `src/services/webviewPdfExporter.ts` is the fallback for machines where Chrome cannot run, converting the page with html2pdf.js in a webview. That output is rasterised — no selectable text, and roughly 3× the file size (117 KB vs 36 KB on the sample document) — so it is only used when Chrome is unavailable, and the user is told why.
+
+`src/services/pdfExporter.ts` uses `puppeteer-core`, which ships **no** browser. `launchChrome()` tries these in order and launches the first one that actually starts:
+
+1. `PUPPETEER_EXECUTABLE_PATH`, if set and present — the escape hatch for offline machines and custom builds
+2. The newest Chrome already in `PUPPETEER_CACHE_DIR` (default `~/.cache/puppeteer`), the cache shared with puppeteer itself
+3. Chrome already in the legacy per-profile cache, `<globalStorageUri>/puppeteer/`
+4. A system-installed Chrome, any release channel
+5. Only if none of the above launches **and** the system can actually run Chrome: offer a one-time ~185 MB download, or the browserless fallback if the user declines
+
+The download is offered only after `findMissingSystemLibraries()` confirms the machine has Chrome's required libraries (`libnspr4`, `libnss3`, `libnssutil3`, `libsmime3`, `libasound`), read from `ldconfig -p` plus `LD_LIBRARY_PATH`. Inferring this from a failed launch is not enough: on a machine with no Chrome at all there is no failure to learn from, so the user would spend the whole download on a browser that cannot start. WSL and container images are the usual case.
+
+Two properties matter for development:
+
+- **A candidate that exists but fails to launch is skipped, not fatal.** Missing system libraries, wrong architecture, a half-deleted install — each falls through to the next candidate.
+- **The download target is deliberately outside `globalStorageUri`.** That path differs between VS Code stable, Insiders and the Extension Development Host, so caching there made each of them fetch its own ~700 MB copy. The shared cache means one download per machine, reused by the Dev Host.
+
+So in a normal dev setup you usually get **no download at all** — the Dev Host reuses whatever Chrome is already on the machine.
+
+### If a download breaks
+
+An interrupted download leaves a build directory with no executable in it. Every later export then failed while unpacking:
 
 ```
-<globalStorageUri>/puppeteer/
+All providers failed for chrome <version>:
+ - DefaultProvider: end of central directory record signature not found
 ```
 
-Under the Extension Development Host, `globalStorageUri` points at a dev-profile path, not your normal VS Code storage — so the first PDF export during development triggers a fresh ~150 MB Chrome download, shown as a progress notification. It is cached after that, but note it is cached *per dev profile*, and wiping the dev profile means downloading again.
+`downloadChrome()` now clears the partial directory before installing and retries once, and `cleanupLegacyBrowserCache()` prunes executable-less build directories from the old per-profile cache at activation. To clear it by hand:
 
-If you are offline or behind a proxy, that download is the thing that will fail. There is no setting to point at a local Chrome today — `getChromeExecutablePath()` always computes the path inside the cache dir.
+```bash
+rm -rf ~/.cache/puppeteer/chrome/<platform>-<version>
+```
+
+> **WSL note:** the system-Chrome lookup resolves to the Windows install (`/mnt/c/Program Files/Google/Chrome/Application/chrome.exe`). That binary cannot be driven from the Linux side, so `.exe` candidates are filtered out on non-Windows platforms.
 
 The web build (`extension.web.ts`) has no puppeteer at all; it exports via the browser's own print pipeline.
 
@@ -131,20 +157,48 @@ npm test   # runs pretest (compile + lint), then vscode-test
 
 ---
 
-## 8. Packaging a local build
+## 8. Dependency hygiene
+
+`npm audit` should report **0 vulnerabilities**. Two things keep it there, and both matter if you touch `package.json`:
+
+**Never run `npm audit fix --force` on this repo.** It "fixes" the packaging and test tooling by *downgrading* them — `@vscode/vsce` → `vsce@1.25.1` and `@vscode/test-cli` → `0.0.11`. Upgrade the direct dependency instead.
+
+**The `overrides` block is load-bearing:**
+
+```json
+"overrides": {
+  "diff": "^8.0.4",
+  "serialize-javascript": "^7.1.0",
+  "tar-fs": "^3.1.1",
+  "ws": "^8.21.0"
+}
+```
+
+- `diff` / `serialize-javascript` patch advisories inside mocha, which pins older majors.
+- `tar-fs` / `ws` patch the tree under `puppeteer-core`, which is deliberately held at **21.11.0**.
+
+### Why puppeteer-core is pinned to 21.x
+
+Do not bump `puppeteer-core` to 22+ casually. From v22 the launcher switched from `--headless` to `--headless=new` and added `--enable-features=PdfOopif`. On v24 the Chrome renderer segfaults mid-export under WSL2 — verified 0/3 successful exports on v24 versus 3/3 on 21.11.0, same Chrome build, same launch args. v24 additionally drops `'networkidle0'` from the accepted `setContent` values (it remains valid for `goto`), so [`pdfExporter.ts`](../../src/services/pdfExporter.ts) would need editing too.
+
+If you do upgrade, actually export a PDF and confirm the file is written — a type-check and a build both pass while the export is broken.
+
+## 9. Packaging a local build
 
 ```bash
-npm run package        # vsce package -> pretty-markdown-<version>.vsix
+npm run package        # @vscode/vsce -> pretty-markdown-<version>.vsix
 code --install-extension pretty-markdown-1.4.0.vsix
 ```
 
 `vscode:prepublish` runs `package-build`, so the packaged bundle is always minified and sourcemap-free. `.vsix` files are gitignored.
 
+Both webview-based exporters load html2pdf from `media/vendor/html2pdf.bundle.min.js`, which `esbuild.js` copies out of `node_modules` on every build. That copy exists because `.vscodeignore` excludes `node_modules/**`: loading the library straight from `node_modules`, as the web build used to, works in the Extension Development Host but not from a packaged `.vsix`. `media/vendor/` is generated, so it is gitignored — run a build before packaging, which `vscode:prepublish` does for you.
+
 Uninstall the local build before going back to a marketplace version, or the two will conflict on the same extension id (`mistx.pretty-markdown`).
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|

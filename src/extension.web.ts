@@ -133,7 +133,7 @@ function renderMarkdown(markdown: string): string {
 
 function getHtml2PdfScriptUri(webview: vscode.Webview, context: vscode.ExtensionContext): vscode.Uri {
     return webview.asWebviewUri(
-        vscode.Uri.joinPath(context.extensionUri, 'node_modules', 'html2pdf.js', 'dist', 'html2pdf.bundle.min.js')
+        vscode.Uri.joinPath(context.extensionUri, 'media', 'vendor', 'html2pdf.bundle.min.js')
     );
 }
 
