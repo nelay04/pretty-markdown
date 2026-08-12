@@ -8,6 +8,7 @@ A beautiful and feature-rich Markdown preview and PDF export extension for Visua
 
 - **Beautiful Preview**: Clean, professional styling with syntax highlighting
 - **PDF Export**: One-click export to high-quality PDF files
+- **Themes and Colours**: Four built-in themes plus per-component colour overrides, applied to the preview and the PDF alike
 - **Mermaid Diagrams**: `mermaid` code blocks render as diagrams in the preview and in exported PDFs
 - **Local Images**: Images stored next to your Markdown file load in the preview and are embedded in the PDF
 - **Clickable Links**: Jump to other Markdown files and workspace files straight from the preview
@@ -97,16 +98,37 @@ echo "Terminal commands look great too!"
 | Preview | Supported | Real-time updates |
 | PDF Export | Supported | High quality output |
 | Syntax Highlighting | Supported | 190+ languages |
-| Custom Themes | Planned | Coming soon |
+| Custom Themes | Supported | Four themes + per-component colours |
 
 ### Blockquotes
 > Pretty Markdown makes your documentation look professional and polished, whether you're viewing it in VS Code or exporting to PDF.
 
 ## Configuration
 
-Currently, Pretty Markdown works with zero configuration. Future versions will include:
+Pretty Markdown works with zero configuration, and the colours can be changed when you want to.
 
-- Custom themes
+| Setting | Description |
+|---------|-------------|
+| `prettyMarkdown.theme` | `default`, `github`, `dark`, or `sepia` |
+| `prettyMarkdown.colors` | Per-component overrides applied on top of the theme |
+
+Open **Pretty Markdown: Settings** to pick a theme and adjust individual colours with a colour picker, or edit them directly in `settings.json`:
+
+```jsonc
+{
+  "prettyMarkdown.theme": "dark",
+  "prettyMarkdown.colors": {
+    "link": "#ff8800",
+    "codeBackground": "#101010",
+    "syntaxKeyword": "#c586c0"
+  }
+}
+```
+
+Every component can be themed: page background and body text, headings and the heading rule, links, inline code, code blocks, blockquotes, tables, horizontal rules, diagram backgrounds, and each syntax-highlighting token. The same palette is used by the preview and by exported PDFs.
+
+Future versions will include:
+
 - Font selection
 - PDF page settings
 - Export templates

@@ -1,14 +1,20 @@
+import { ThemeTokens, getThemeCssVariables, getThemeTokens } from '../services/themeManager';
+
 export interface WebviewContentOptions {
     /** Injected verbatim into <head>, e.g. a Content-Security-Policy meta tag. */
     head?: string;
     /** Injected just before </body>, e.g. mermaid or link handling scripts. */
     scripts?: string;
+    /** Component colours. Falls back to the built-in palette when omitted. */
+    theme?: ThemeTokens;
 }
 
 /**
  * Generate complete HTML content for webview preview
  */
 export function getWebviewContent(content: string, title: string, options: WebviewContentOptions = {}): string {
+    const theme = options.theme || getThemeTokens('default');
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,24 +22,9 @@ export function getWebviewContent(content: string, title: string, options: Webvi
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title}</title>${options.head ? `\n    ${options.head}` : ''}
     <style>
-        /* Pretty Markdown Color Palette */
+        /* Component colours, resolved from the prettyMarkdown.theme setting */
         :root {
-            --pretty-black: #000000;
-            --pretty-dark-blue: #0000AA;
-            --pretty-dark-green: #007c2b;
-            --pretty-dark-cyan: #00AAAA;
-            --pretty-dark-red: #AA0000;
-            --pretty-dark-magenta: #AA00AA;
-            --pretty-brown: #AA5500;
-            --pretty-light-gray: #AAAAAA;
-            --pretty-dark-gray: #555555;
-            --pretty-blue: #5555FF;
-            --pretty-green: #569cd6;
-            --pretty-cyan: #ce9178;
-            --pretty-red: #FF5555;
-            --pretty-magenta: #ff3dff;
-            --pretty-yellow: #f19130;
-            --pretty-white: #FFFFFF;
+${getThemeCssVariables(theme)}
         }
         
         * {
@@ -45,8 +36,8 @@ export function getWebviewContent(content: string, title: string, options: Webvi
         body {
             font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
             line-height: 1.5;
-            color: #1a1a1a;
-            background: #ffffff;
+            color: var(--pm-text);
+            background: var(--pm-background);
             padding: 20px;
             max-width: 800px;
             margin: 0 auto;
@@ -58,12 +49,12 @@ export function getWebviewContent(content: string, title: string, options: Webvi
             margin: 16px 0 8px;
             font-weight: 500;
             line-height: 1.3;
-            color: #000000;
+            color: var(--pm-heading);
         }
         
         h1 {
             font-size: 1.75em;
-            border-bottom: 1px solid #cccccc;
+            border-bottom: 1px solid var(--pm-heading-rule);
             padding-bottom: 6px;
             margin-bottom: 16px;
         }
@@ -91,35 +82,35 @@ export function getWebviewContent(content: string, title: string, options: Webvi
         }
         
         a {
-            color: #333333;
+            color: var(--pm-link);
             text-decoration: none;
-            border-bottom: 1px solid #999999;
+            border-bottom: 1px solid var(--pm-link);
         }
         
         a:hover {
-            color: #000000;
-            border-bottom: 1px solid #333333;
+            color: var(--pm-link-hover);
+            border-bottom: 1px solid var(--pm-link-hover);
         }
         
         /* Inline code */
         code {
-            background: #f5f7f9;
+            background: var(--pm-inline-code-background);
             padding: 2px 4px;
             border-radius: 2px;
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 0.85em;
-            color: var(--pretty-dark-red);
+            color: var(--pm-inline-code-text);
         }
         
         /* Code blocks */
         pre {
-            background: #f5f7f9;
-            color: #1a1a1a;
+            background: var(--pm-code-background);
+            color: var(--pm-code-text);
             padding: 12px;
             border-radius: 3px;
             overflow-x: auto;
             margin: 12px 0;
-            border: 1px solid #d0d8e0;
+            border: 1px solid var(--pm-code-border);
             font-size: 0.85em;
             line-height: 1.4;
         }
@@ -132,29 +123,29 @@ export function getWebviewContent(content: string, title: string, options: Webvi
         }
         
         /* Syntax highlighting with Pretty Markdown colors */
-        .hljs-keyword { color: var(--pretty-yellow); }
-        .hljs-string { color: var(--pretty-green); }
-        .hljs-comment { color: var(--pretty-dark-gray); }
-        .hljs-number { color: var(--pretty-cyan); }
-        .hljs-built_in { color: var(--pretty-magenta); }
-        .hljs-variable { color: var(--pretty-blue); }
-        .hljs-title { color: var(--pretty-red); }
-        .hljs-attr { color: var(--pretty-dark-cyan); }
-        .hljs-selector-tag { color: var(--pretty-yellow); }
-        .hljs-selector-id { color: var(--pretty-green); }
-        .hljs-selector-class { color: var(--pretty-cyan); }
-        .hljs-literal { color: var(--pretty-magenta); }
-        .hljs-function { color: var(--pretty-blue); }
-        .hljs-punctuation { color: var(--pretty-light-gray); }
+        .hljs-keyword { color: var(--pm-syntax-keyword); }
+        .hljs-string { color: var(--pm-syntax-string); }
+        .hljs-comment { color: var(--pm-syntax-comment); }
+        .hljs-number { color: var(--pm-syntax-number); }
+        .hljs-built_in { color: var(--pm-syntax-built-in); }
+        .hljs-variable { color: var(--pm-syntax-variable); }
+        .hljs-title { color: var(--pm-syntax-title); }
+        .hljs-attr { color: var(--pm-syntax-attribute); }
+        .hljs-selector-tag { color: var(--pm-syntax-keyword); }
+        .hljs-selector-id { color: var(--pm-syntax-string); }
+        .hljs-selector-class { color: var(--pm-syntax-number); }
+        .hljs-literal { color: var(--pm-syntax-literal); }
+        .hljs-function { color: var(--pm-syntax-function); }
+        .hljs-punctuation { color: var(--pm-syntax-punctuation); }
         
         /* Blockquotes */
         blockquote {
-            border-left: 3px solid #666666;
+            border-left: 3px solid var(--pm-blockquote-border);
             padding-left: 12px;
             margin: 12px 0;
-            color: #555555;
+            color: var(--pm-blockquote-text);
             font-style: italic;
-            background: #f9f9f9;
+            background: var(--pm-blockquote-background);
             padding: 8px 12px;
         }
         
@@ -173,25 +164,25 @@ export function getWebviewContent(content: string, title: string, options: Webvi
             border-collapse: collapse;
             width: 100%;
             margin: 12px 0;
-            background: #ffffff;
-            border: 1px solid #cccccc;
+            background: var(--pm-table-background);
+            border: 1px solid var(--pm-table-border);
             font-size: 0.9em;
         }
         
         th, td {
-            border: 1px solid #cccccc;
+            border: 1px solid var(--pm-table-border);
             padding: 6px 8px;
             text-align: left;
         }
         
         th {
-            background: #f5f5f5;
+            background: var(--pm-table-header-background);
             font-weight: 500;
-            color: #000000;
+            color: var(--pm-heading);
         }
         
         tr:nth-child(even) {
-            background: #fafafa;
+            background: var(--pm-table-row-alternate);
         }
         
         /* Images */
@@ -203,7 +194,7 @@ export function getWebviewContent(content: string, title: string, options: Webvi
 
         /* Mermaid diagrams */
         pre.mermaid {
-            background: #ffffff;
+            background: var(--pm-diagram-background);
             border: none;
             padding: 8px 0;
             margin: 12px 0;
@@ -219,7 +210,7 @@ export function getWebviewContent(content: string, title: string, options: Webvi
 
         /* Until mermaid has run, show the source rather than a flash of raw text */
         pre.mermaid:not([data-processed]) {
-            color: #555555;
+            color: var(--pm-blockquote-text);
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 0.85em;
             text-align: left;
@@ -228,7 +219,7 @@ export function getWebviewContent(content: string, title: string, options: Webvi
         /* Horizontal rule */
         hr {
             border: none;
-            border-top: 1px solid #cccccc;
+            border-top: 1px solid var(--pm-horizontal-rule);
             margin: 16px 0;
         }
         

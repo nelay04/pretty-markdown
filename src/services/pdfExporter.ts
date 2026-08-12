@@ -18,7 +18,8 @@ import {
 import { renderMarkdown, containsMermaid } from './markdownRenderer';
 import { getWebviewContent } from '../utils/htmlGenerator';
 import { exportPdfWithWebview } from './webviewPdfExporter';
-import { getMermaidBootScript, mermaidReadyFlag } from '../utils/mermaid';
+import { getMermaidBootScript, getMermaidCleanupScript, mermaidReadyFlag } from '../utils/mermaid';
+import { resolveTheme, getMermaidThemeVariables, ThemeTokens } from './themeManager';
 
 /**
  * Shared download location, deliberately not inside globalStorageUri: that path
@@ -525,7 +526,7 @@ function inlineImage(absolutePath: string): string | undefined {
  * Diagram failures must not sink the export, so a timeout or a missing library
  * simply leaves the diagram as its source text in the PDF.
  */
-async function renderMermaidDiagrams(page: Page, context: vscode.ExtensionContext): Promise<void> {
+async function renderMermaidDiagrams(page: Page, context: vscode.ExtensionContext, theme: ThemeTokens): Promise<void> {
     const mermaidPath = path.join(context.extensionPath, 'media', 'vendor', 'mermaid.min.js');
 
     if (!fs.existsSync(mermaidPath)) {
@@ -534,8 +535,9 @@ async function renderMermaidDiagrams(page: Page, context: vscode.ExtensionContex
 
     try {
         await page.addScriptTag({ path: mermaidPath });
-        await page.evaluate(getMermaidBootScript());
+        await page.evaluate(getMermaidBootScript({ variables: getMermaidThemeVariables(theme) }));
         await page.waitForFunction(`window.${mermaidReadyFlag} === true`, { timeout: mermaidRenderTimeoutMs });
+        await page.evaluate(getMermaidCleanupScript());
     } catch {
         // Leave the source text in place rather than failing the export.
     }
@@ -550,7 +552,8 @@ async function exportWithoutBrowser(
     context: vscode.ExtensionContext,
     fullHtml: string,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
-    launchError: unknown
+    launchError: unknown,
+    theme: ThemeTokens
 ): Promise<void> {
     const defaultPath = document.fileName.replace(/\.md$/, '.pdf');
     const pdfPath = await vscode.window.showSaveDialog({
@@ -563,7 +566,7 @@ async function exportWithoutBrowser(
     }
 
     progress.report({ increment: 30, message: 'Chrome unavailable, using built-in converter...' });
-    await exportPdfWithWebview(context, fullHtml, pdfPath);
+    await exportPdfWithWebview(context, fullHtml, pdfPath, theme);
     progress.report({ increment: 40, message: 'Done!' });
 
     // Not awaited: the progress notification stays on screen until this task
@@ -595,7 +598,8 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
             }
         }
     });
-    const fullHtml = getWebviewContent(html, path.basename(document.fileName));
+    const theme = resolveTheme(document.uri);
+    const fullHtml = getWebviewContent(html, path.basename(document.fileName), { theme });
     const needsMermaid = containsMermaid(html);
 
     vscode.window.withProgress({
@@ -612,7 +616,7 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
             } catch (launchError) {
                 // No usable Chrome on this machine; fall back to the bundled
                 // converter rather than failing the export outright.
-                await exportWithoutBrowser(document, context, fullHtml, progress, launchError);
+                await exportWithoutBrowser(document, context, fullHtml, progress, launchError, theme);
                 return;
             }
 
@@ -624,7 +628,7 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
 
                 if (needsMermaid) {
                     progress.report({ message: 'Rendering diagrams...' });
-                    await renderMermaidDiagrams(page, context);
+                    await renderMermaidDiagrams(page, context, theme);
                 }
 
                 progress.report({ increment: 30, message: "Generating PDF..." });

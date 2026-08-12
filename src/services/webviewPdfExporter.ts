@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { getMermaidBootScript, mermaidReadyFlag } from '../utils/mermaid';
+import { getMermaidBootScript, getMermaidCleanupScript, mermaidReadyFlag } from '../utils/mermaid';
+import { ThemeTokens, getMermaidThemeVariables } from './themeManager';
 
 /**
  * PDF export that needs no browser download: the page is rendered in a webview
@@ -31,7 +32,8 @@ export function buildConversionDocument(
     scriptUri: vscode.Uri,
     nonce: string,
     cspSource: string,
-    mermaidUri?: vscode.Uri
+    mermaidUri?: vscode.Uri,
+    theme?: ThemeTokens
 ): string {
     const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; ` +
         `img-src ${cspSource} data: https: http:; style-src 'unsafe-inline' ${cspSource}; ` +
@@ -52,7 +54,7 @@ export function buildConversionDocument(
 
             // Diagrams have to finish drawing before the page is rasterised.
             function whenDiagramsReady() {
-                ${mermaidUri ? getMermaidBootScript() : `window.${mermaidReadyFlag} = true;`}
+                ${mermaidUri ? getMermaidBootScript(theme ? { variables: getMermaidThemeVariables(theme) } : {}) : `window.${mermaidReadyFlag} = true;`}
 
                 return new Promise((resolve) => {
                     const deadline = Date.now() + ${mermaidTimeoutMs};
@@ -74,6 +76,8 @@ export function buildConversionDocument(
                 }
 
                 whenDiagramsReady().then(() => {
+                ${getMermaidCleanupScript()}
+
                 html2pdf().set({
                     margin: [10, 10, 10, 10],
                     image: { type: 'jpeg', quality: 0.98 },
@@ -120,7 +124,8 @@ export function buildConversionDocument(
 export async function exportPdfWithWebview(
     context: vscode.ExtensionContext,
     fullHtml: string,
-    targetUri: vscode.Uri
+    targetUri: vscode.Uri,
+    theme?: ThemeTokens
 ): Promise<void> {
     const panel = vscode.window.createWebviewPanel(
         'prettyMarkdownPdfExport',
@@ -169,7 +174,7 @@ export async function exportPdfWithWebview(
             });
 
             context.subscriptions.push(messageSubscription, disposeSubscription);
-            panel.webview.html = buildConversionDocument(fullHtml, scriptUri, nonce, panel.webview.cspSource, mermaidUri);
+            panel.webview.html = buildConversionDocument(fullHtml, scriptUri, nonce, panel.webview.cspSource, mermaidUri, theme);
         });
 
         await vscode.workspace.fs.writeFile(targetUri, Buffer.from(base64, 'base64'));

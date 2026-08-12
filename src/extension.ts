@@ -101,6 +101,20 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // Auto-update preview on document change
+    // Re-render the open preview when the palette changes, so colour edits
+    // are visible immediately rather than on the next keystroke.
+    vscode.workspace.onDidChangeConfiguration(event => {
+        if (!event.affectsConfiguration('prettyMarkdown.theme') &&
+            !event.affectsConfiguration('prettyMarkdown.colors')) {
+            return;
+        }
+
+        const editor = vscode.window.activeTextEditor;
+        if (getPreviewPanel() && editor?.document.languageId === 'markdown') {
+            updatePreview(editor.document, context);
+        }
+    });
+
     vscode.workspace.onDidChangeTextDocument(event => {
         if (getPreviewPanel() && event.document.languageId === 'markdown') {
             updatePreview(event.document, context);

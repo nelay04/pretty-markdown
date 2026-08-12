@@ -8,10 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Custom theme support
 - Export to HTML functionality
 - Table of contents generation
 - Math equation rendering
+
+## [1.6.0] - 12-08-2026
+
+### Added
+- **Themes and per-component colours**: Choose between the `default`, `github`, `dark`, and `sepia` themes with `prettyMarkdown.theme`, and override any individual component — headings, links, code blocks, tables, blockquotes, diagrams, and each syntax-highlighting token — with `prettyMarkdown.colors`. The palette can also be edited with colour pickers in the Pretty Markdown settings page. The same colours are used by the preview, exported PDFs, and the web build, and the preview updates as soon as a colour changes.
+
+### Fixed
+- **Mermaid error graphic could still reach a PDF**: mermaid may replace a diagram block with its "Syntax error" image after rendering has already reported success, so the block is now restored to its source text immediately before the page is printed or rasterised.
 
 ## [1.5.0] - 12-08-2026
 

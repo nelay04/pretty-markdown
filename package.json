@@ -2,7 +2,7 @@
   "name": "pretty-markdown",
   "displayName": "Pretty Markdown",
   "description": "Beautiful Markdown preview and PDF export with syntax highlighting",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "publisher": "mistx",
   "author": {
     "name": "Snowy",
@@ -231,6 +231,160 @@
           "when": "editorLangId == markdown"
         }
       ]
+    },
+    "configuration": {
+      "title": "Pretty Markdown",
+      "properties": {
+        "prettyMarkdown.theme": {
+          "type": "string",
+          "enum": [
+            "default",
+            "github",
+            "dark",
+            "sepia"
+          ],
+          "enumDescriptions": [
+            "The original Pretty Markdown palette",
+            "Light palette close to GitHub rendered Markdown",
+            "Dark palette suited to dark editors",
+            "Warm, low-contrast palette for long reading"
+          ],
+          "default": "default",
+          "markdownDescription": "Colour theme for the preview and exported PDFs. Individual components can be overridden with `#prettyMarkdown.colors#`."
+        },
+        "prettyMarkdown.colors": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": false,
+          "properties": {
+            "background": {
+              "type": "string",
+              "description": "Page background. Any CSS colour, e.g. #1a1a1a."
+            },
+            "text": {
+              "type": "string",
+              "description": "Body text. Any CSS colour, e.g. #1a1a1a."
+            },
+            "heading": {
+              "type": "string",
+              "description": "Heading text. Any CSS colour, e.g. #1a1a1a."
+            },
+            "headingRule": {
+              "type": "string",
+              "description": "Rule under the top-level heading. Any CSS colour, e.g. #1a1a1a."
+            },
+            "link": {
+              "type": "string",
+              "description": "Link text. Any CSS colour, e.g. #1a1a1a."
+            },
+            "linkHover": {
+              "type": "string",
+              "description": "Link text on hover. Any CSS colour, e.g. #1a1a1a."
+            },
+            "inlineCodeBackground": {
+              "type": "string",
+              "description": "Inline `code` background. Any CSS colour, e.g. #1a1a1a."
+            },
+            "inlineCodeText": {
+              "type": "string",
+              "description": "Inline `code` text. Any CSS colour, e.g. #1a1a1a."
+            },
+            "codeBackground": {
+              "type": "string",
+              "description": "Code block background. Any CSS colour, e.g. #1a1a1a."
+            },
+            "codeText": {
+              "type": "string",
+              "description": "Code block text. Any CSS colour, e.g. #1a1a1a."
+            },
+            "codeBorder": {
+              "type": "string",
+              "description": "Code block border. Any CSS colour, e.g. #1a1a1a."
+            },
+            "blockquoteBackground": {
+              "type": "string",
+              "description": "Blockquote background. Any CSS colour, e.g. #1a1a1a."
+            },
+            "blockquoteBorder": {
+              "type": "string",
+              "description": "Blockquote left border. Any CSS colour, e.g. #1a1a1a."
+            },
+            "blockquoteText": {
+              "type": "string",
+              "description": "Blockquote text. Any CSS colour, e.g. #1a1a1a."
+            },
+            "tableBackground": {
+              "type": "string",
+              "description": "Table background. Any CSS colour, e.g. #1a1a1a."
+            },
+            "tableHeaderBackground": {
+              "type": "string",
+              "description": "Table header background. Any CSS colour, e.g. #1a1a1a."
+            },
+            "tableRowAlternate": {
+              "type": "string",
+              "description": "Alternating table row background. Any CSS colour, e.g. #1a1a1a."
+            },
+            "tableBorder": {
+              "type": "string",
+              "description": "Table borders. Any CSS colour, e.g. #1a1a1a."
+            },
+            "horizontalRule": {
+              "type": "string",
+              "description": "Horizontal rule. Any CSS colour, e.g. #1a1a1a."
+            },
+            "diagramBackground": {
+              "type": "string",
+              "description": "Mermaid diagram background. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxKeyword": {
+              "type": "string",
+              "description": "Syntax: keywords. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxString": {
+              "type": "string",
+              "description": "Syntax: strings. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxComment": {
+              "type": "string",
+              "description": "Syntax: comments. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxNumber": {
+              "type": "string",
+              "description": "Syntax: numbers. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxBuiltIn": {
+              "type": "string",
+              "description": "Syntax: built-ins. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxVariable": {
+              "type": "string",
+              "description": "Syntax: variables. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxTitle": {
+              "type": "string",
+              "description": "Syntax: titles. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxAttribute": {
+              "type": "string",
+              "description": "Syntax: attributes. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxLiteral": {
+              "type": "string",
+              "description": "Syntax: literals. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxFunction": {
+              "type": "string",
+              "description": "Syntax: functions. Any CSS colour, e.g. #1a1a1a."
+            },
+            "syntaxPunctuation": {
+              "type": "string",
+              "description": "Syntax: punctuation. Any CSS colour, e.g. #1a1a1a."
+            }
+          },
+          "markdownDescription": "Per-component colour overrides applied on top of `#prettyMarkdown.theme#`. Values that are not valid CSS colours are ignored."
+        }
+      }
     }
   },
   "scripts": {

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js';
 import { getMermaidBootScript } from './utils/mermaid';
+import { resolveTheme, getThemeCssVariables, getMermaidThemeVariables, ThemeTokens } from './services/themeManager';
 
 let previewPanel: vscode.WebviewPanel | undefined;
 
@@ -95,8 +96,9 @@ function updatePreview(document: vscode.TextDocument, context: vscode.ExtensionC
         ? getMermaidScriptUri(previewPanel.webview, context)
         : undefined;
     const nonce = getNonce();
+    const theme = resolveTheme(document.uri);
     previewPanel.webview.html = getWebviewContent(
-        html, title, scriptUri, nonce, previewPanel.webview.cspSource, mermaidUri
+        html, title, scriptUri, nonce, previewPanel.webview.cspSource, mermaidUri, theme
     );
 }
 
@@ -162,7 +164,7 @@ function getNonce(): string {
     return text;
 }
 
-function getWebviewContent(content: string, title: string, html2pdfUri: vscode.Uri, nonce: string, cspSource: string, mermaidUri?: vscode.Uri): string {
+function getWebviewContent(content: string, title: string, html2pdfUri: vscode.Uri, nonce: string, cspSource: string, mermaidUri?: vscode.Uri, theme?: ThemeTokens): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -172,29 +174,14 @@ function getWebviewContent(content: string, title: string, html2pdfUri: vscode.U
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource} 'nonce-${nonce}';">
     <style>
         :root {
-            --pretty-black: #000000;
-            --pretty-dark-blue: #0000AA;
-            --pretty-dark-green: #007c2b;
-            --pretty-dark-cyan: #00AAAA;
-            --pretty-dark-red: #AA0000;
-            --pretty-dark-magenta: #AA00AA;
-            --pretty-brown: #AA5500;
-            --pretty-light-gray: #AAAAAA;
-            --pretty-dark-gray: #555555;
-            --pretty-blue: #5555FF;
-            --pretty-green: #569cd6;
-            --pretty-cyan: #ce9178;
-            --pretty-red: #FF5555;
-            --pretty-magenta: #ff3dff;
-            --pretty-yellow: #f19130;
-            --pretty-white: #FFFFFF;
+${getThemeCssVariables(theme || resolveTheme())}
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
             line-height: 1.5;
-            color: #1a1a1a;
-            background: #ffffff;
+            color: var(--pm-text);
+            background: var(--pm-background);
             padding: 20px;
             max-width: 800px;
             margin: 0 auto;
@@ -204,11 +191,11 @@ function getWebviewContent(content: string, title: string, html2pdfUri: vscode.U
             margin: 16px 0 8px;
             font-weight: 500;
             line-height: 1.3;
-            color: #000000;
+            color: var(--pm-heading);
         }
         h1 {
             font-size: 1.75em;
-            border-bottom: 1px solid #cccccc;
+            border-bottom: 1px solid var(--pm-heading-rule);
             padding-bottom: 6px;
             margin-bottom: 16px;
         }
@@ -218,55 +205,55 @@ function getWebviewContent(content: string, title: string, html2pdfUri: vscode.U
         h5, h6 { font-size: 1em; }
         p { margin: 8px 0; text-align: left; }
         a {
-            color: #333333;
+            color: var(--pm-link);
             text-decoration: none;
-            border-bottom: 1px solid #999999;
+            border-bottom: 1px solid var(--pm-link);
         }
         a:hover {
-            color: #000000;
-            border-bottom: 1px solid #333333;
+            color: var(--pm-link-hover);
+            border-bottom: 1px solid var(--pm-link-hover);
         }
         code {
-            background: #f5f7f9;
+            background: var(--pm-inline-code-background);
             padding: 2px 4px;
             border-radius: 2px;
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 0.85em;
-            color: var(--pretty-dark-red);
+            color: var(--pm-inline-code-text);
         }
         pre {
-            background: #f5f7f9;
-            color: #1a1a1a;
+            background: var(--pm-code-background);
+            color: var(--pm-code-text);
             padding: 12px;
             border-radius: 3px;
             overflow-x: auto;
             margin: 12px 0;
-            border: 1px solid #d0d8e0;
+            border: 1px solid var(--pm-code-border);
             font-size: 0.85em;
             line-height: 1.4;
         }
         pre code { background: transparent; padding: 0; color: inherit; border: none; }
-        .hljs-keyword { color: var(--pretty-yellow); }
-        .hljs-string { color: var(--pretty-green); }
-        .hljs-comment { color: var(--pretty-dark-gray); }
-        .hljs-number { color: var(--pretty-cyan); }
-        .hljs-built_in { color: var(--pretty-magenta); }
-        .hljs-variable { color: var(--pretty-blue); }
-        .hljs-title { color: var(--pretty-red); }
-        .hljs-attr { color: var(--pretty-dark-cyan); }
-        .hljs-selector-tag { color: var(--pretty-yellow); }
-        .hljs-selector-id { color: var(--pretty-green); }
-        .hljs-selector-class { color: var(--pretty-cyan); }
-        .hljs-literal { color: var(--pretty-magenta); }
-        .hljs-function { color: var(--pretty-blue); }
-        .hljs-punctuation { color: var(--pretty-light-gray); }
+        .hljs-keyword { color: var(--pm-syntax-keyword); }
+        .hljs-string { color: var(--pm-syntax-string); }
+        .hljs-comment { color: var(--pm-syntax-comment); }
+        .hljs-number { color: var(--pm-syntax-number); }
+        .hljs-built_in { color: var(--pm-syntax-built-in); }
+        .hljs-variable { color: var(--pm-syntax-variable); }
+        .hljs-title { color: var(--pm-syntax-title); }
+        .hljs-attr { color: var(--pm-syntax-attribute); }
+        .hljs-selector-tag { color: var(--pm-syntax-keyword); }
+        .hljs-selector-id { color: var(--pm-syntax-string); }
+        .hljs-selector-class { color: var(--pm-syntax-number); }
+        .hljs-literal { color: var(--pm-syntax-literal); }
+        .hljs-function { color: var(--pm-syntax-function); }
+        .hljs-punctuation { color: var(--pm-syntax-punctuation); }
         blockquote {
-            border-left: 3px solid #666666;
+            border-left: 3px solid var(--pm-blockquote-border);
             padding-left: 12px;
             margin: 12px 0;
-            color: #555555;
+            color: var(--pm-blockquote-text);
             font-style: italic;
-            background: #f9f9f9;
+            background: var(--pm-blockquote-background);
             padding: 8px 12px;
         }
         ul, ol { margin: 8px 0; padding-left: 20px; }
@@ -275,26 +262,26 @@ function getWebviewContent(content: string, title: string, html2pdfUri: vscode.U
             border-collapse: collapse;
             width: 100%;
             margin: 12px 0;
-            background: #ffffff;
-            border: 1px solid #cccccc;
+            background: var(--pm-table-background);
+            border: 1px solid var(--pm-table-border);
             font-size: 0.9em;
         }
         th, td {
-            border: 1px solid #cccccc;
+            border: 1px solid var(--pm-table-border);
             padding: 6px 8px;
             text-align: left;
         }
         th {
-            background: #f5f5f5;
+            background: var(--pm-table-header-background);
             font-weight: 500;
-            color: #000000;
+            color: var(--pm-heading);
         }
-        tr:nth-child(even) { background: #fafafa; }
+        tr:nth-child(even) { background: var(--pm-table-row-alternate); }
         img { max-width: 100%; height: auto; margin: 12px 0; }
-        pre.mermaid { background: #ffffff; border: none; padding: 8px 0; margin: 12px 0; text-align: center; overflow-x: auto; page-break-inside: avoid; }
+        pre.mermaid { background: var(--pm-diagram-background); border: none; padding: 8px 0; margin: 12px 0; text-align: center; overflow-x: auto; page-break-inside: avoid; }
         pre.mermaid svg { max-width: 100%; height: auto; }
-        pre.mermaid:not([data-processed]) { color: #555555; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85em; text-align: left; }
-        hr { border: none; border-top: 1px solid #cccccc; margin: 16px 0; }
+        pre.mermaid:not([data-processed]) { color: var(--pm-blockquote-text); font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85em; text-align: left; }
+        hr { border: none; border-top: 1px solid var(--pm-horizontal-rule); margin: 16px 0; }
         h1 + p, h2 + p, h3 + p, h4 + p, h5 + p, h6 + p { margin-top: 4px; }
         @media print {
             body { padding: 5mm; font-size: 11pt; line-height: 1.4; }
@@ -311,7 +298,7 @@ function getWebviewContent(content: string, title: string, html2pdfUri: vscode.U
     ${mermaidUri ? `<script nonce="${nonce}" src="${mermaidUri}"></script>` : ''}
     <script nonce="${nonce}" src="${html2pdfUri}"></script>
     <script nonce="${nonce}">
-        ${mermaidUri ? getMermaidBootScript() : ''}
+        ${mermaidUri && theme ? getMermaidBootScript({ variables: getMermaidThemeVariables(theme) }) : (mermaidUri ? getMermaidBootScript() : '')}
 
         window.addEventListener('message', (event) => {
             const message = event.data;

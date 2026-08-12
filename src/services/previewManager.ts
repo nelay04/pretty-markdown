@@ -3,6 +3,7 @@ import * as path from 'path';
 import { renderMarkdown, containsMermaid } from './markdownRenderer';
 import { getWebviewContent } from '../utils/htmlGenerator';
 import { getMermaidBootScript } from '../utils/mermaid';
+import { resolveTheme, getMermaidThemeVariables } from './themeManager';
 
 let previewPanel: vscode.WebviewPanel | undefined;
 let previewDocumentUri: vscode.Uri | undefined;
@@ -156,6 +157,7 @@ export function updatePreview(document: vscode.TextDocument, context: vscode.Ext
     });
 
     const nonce = getNonce();
+    const theme = resolveTheme(document.uri);
     const needsMermaid = containsMermaid(html);
     const mermaidUri = webview.asWebviewUri(
         vscode.Uri.joinPath(context.extensionUri, 'media', 'vendor', 'mermaid.min.js')
@@ -166,7 +168,7 @@ export function updatePreview(document: vscode.TextDocument, context: vscode.Ext
         `font-src ${webview.cspSource} data:; script-src 'nonce-${nonce}';">`;
 
     const scripts = `${needsMermaid ? `    <script nonce="${nonce}" src="${mermaidUri}"></script>\n` : ''}    <script nonce="${nonce}">
-${needsMermaid ? getMermaidBootScript() : ''}
+${needsMermaid ? getMermaidBootScript({ variables: getMermaidThemeVariables(theme) }) : ''}
         (function () {
             const vscodeApi = acquireVsCodeApi();
 
@@ -189,7 +191,7 @@ ${needsMermaid ? getMermaidBootScript() : ''}
         })();
     </script>`;
 
-    webview.html = getWebviewContent(html, 'Preview', { head, scripts });
+    webview.html = getWebviewContent(html, 'Preview', { head, scripts, theme });
 }
 
 /**
