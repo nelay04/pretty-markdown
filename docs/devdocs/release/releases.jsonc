@@ -1,0 +1,28 @@
+// Release log for Pretty Markdown, written by the "prepare-release" prompt
+// (.github/prompts/prepare-release.prompt.md).
+//
+// The newest release is the LAST object in the array, and its "releaseName" is
+// the line under which everything is settled: only CHANGELOG versions above it
+// are ever offered as a new release, whether an older one was folded in or
+// skipped entirely.
+//
+// "dated" is Asia/Kolkata time, taken verbatim from:
+//   node -e "console.log(new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date()).replace(/[,\s]+/g, '-'))"
+//
+// Releases made before this log existed are only in CHANGELOG.md, so the first
+// run of the prompt offers every version in it — select just the ones going out.
+//
+// {
+//   "releaseName": "1.7.0",
+//   "dated": "13-Aug-2026-01:47-am",
+//   "releaseTitle": "Release v1.7.0",
+//   "releaseNote": "### Added\n- ...\n\n### Fixed\n- ..."
+// }
+[
+  {
+    "releaseName": "1.6.0",
+    "dated": "13-Aug-2026-02:23-am",
+    "releaseTitle": "Release v1.6.0",
+    "releaseNote": "### Added\n- Choose how an oversized diagram or image is printed when it will not fit the rest of the page — whole on the next page, or split across the break — and settle it once with `prettyMarkdown.oversizedDiagrams`.\n- Four themes (`default`, `github`, `dark`, `sepia`) via `prettyMarkdown.theme`, with every component recolourable through `prettyMarkdown.colors` or the colour pickers in the settings page. The preview, exported PDFs, and the web build share the palette, and the preview updates the moment a colour changes.\n\n### Changed\n- Exported PDFs give text more room: side margins halved from 15 mm to 7.5 mm.\n\n### Fixed\n- Exported PDFs no longer leave page-sized gaps around a tall diagram, image, or code block. Diagrams and images are scaled to fit alongside their heading, code blocks break across pages, and anything too tall to stay readable is printed across the break.\n- The mermaid \"Syntax error\" graphic can no longer reach an exported PDF."
+  }
+]

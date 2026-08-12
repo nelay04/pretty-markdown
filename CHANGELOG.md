@@ -15,9 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.6.0] - 12-08-2026
 
 ### Added
+- **A choice for diagrams that cannot share a page**: When a diagram or image is too tall to fit in the space left on the page, the export asks whether to print it whole on the next page or to split it across the page break, and `prettyMarkdown.oversizedDiagrams` answers that once and for all.
 - **Themes and per-component colours**: Choose between the `default`, `github`, `dark`, and `sepia` themes with `prettyMarkdown.theme`, and override any individual component — headings, links, code blocks, tables, blockquotes, diagrams, and each syntax-highlighting token — with `prettyMarkdown.colors`. The palette can also be edited with colour pickers in the Pretty Markdown settings page. The same colours are used by the preview, exported PDFs, and the web build, and the preview updates as soon as a colour changes.
 
+### Changed
+- **Wider text in exported PDFs**: The whitespace down each side of the page has been halved, from 15 mm to 7.5 mm.
+
 ### Fixed
+- **Page-sized gaps in exported PDFs**: A diagram, image or code block taller than one printed page used to be pushed to a page of its own, leaving the rest of the previous page blank — a large diagram cost a near-empty page before it and another one after. Diagrams and images are now scaled to fit a page together with the heading that prints with them, code blocks break across pages instead of stranding one, and anything too tall to shrink and stay readable is printed across the page break.
 - **Mermaid error graphic could still reach a PDF**: mermaid may replace a diagram block with its "Syntax error" image after rendering has already reported success, so the block is now restored to its source text immediately before the page is printed or rasterised.
 
 ## [1.5.0] - 12-08-2026

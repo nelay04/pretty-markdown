@@ -383,6 +383,21 @@
             }
           },
           "markdownDescription": "Per-component colour overrides applied on top of `#prettyMarkdown.theme#`. Values that are not valid CSS colours are ignored."
+        },
+        "prettyMarkdown.oversizedDiagrams": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "keepWhole",
+            "split"
+          ],
+          "enumDescriptions": [
+            "Ask during export, once it is known which diagrams are affected",
+            "Scale the diagram so it prints whole, leaving the space before it blank",
+            "Print the diagram across the page break so no space is wasted"
+          ],
+          "default": "ask",
+          "markdownDescription": "What to do when a diagram or image is too tall to fit in the space left on the page of an exported PDF."
         }
       }
     }

@@ -231,7 +231,8 @@ ${getThemeCssVariables(theme)}
         /* Print styles for clean PDF export */
         @media print {
             body {
-                padding: 5mm;
+                /* Side whitespace is mostly the page margin; keep the column wide. */
+                padding: 5mm 2.5mm;
                 font-size: 11pt;
                 line-height: 1.4;
             }

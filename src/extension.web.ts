@@ -2,9 +2,14 @@ import * as vscode from 'vscode';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js';
 import { getMermaidBootScript } from './utils/mermaid';
+import { getPrintFitScript, policyOf, OversizedBlockPolicy, OversizedBlockSetting } from './utils/printLayout';
 import { resolveTheme, getThemeCssVariables, getMermaidThemeVariables, ThemeTokens } from './services/themeManager';
 
 let previewPanel: vscode.WebviewPanel | undefined;
+
+/** Page margins, in millimetres, of the A4 pages html2pdf produces. */
+const pageMarginSideMm = 5;
+const pageMarginBlockMm = 10;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Pretty Markdown (web) extension is now active!');
@@ -97,8 +102,12 @@ function updatePreview(document: vscode.TextDocument, context: vscode.ExtensionC
         : undefined;
     const nonce = getNonce();
     const theme = resolveTheme(document.uri);
+    // The web build cannot ask mid-export, so it follows the setting as given.
+    const policy = policyOf(vscode.workspace
+        .getConfiguration('prettyMarkdown', document.uri)
+        .get<OversizedBlockSetting>('oversizedDiagrams', 'ask'));
     previewPanel.webview.html = getWebviewContent(
-        html, title, scriptUri, nonce, previewPanel.webview.cspSource, mermaidUri, theme
+        html, title, scriptUri, nonce, previewPanel.webview.cspSource, mermaidUri, theme, policy
     );
 }
 
@@ -164,7 +173,7 @@ function getNonce(): string {
     return text;
 }
 
-function getWebviewContent(content: string, title: string, html2pdfUri: vscode.Uri, nonce: string, cspSource: string, mermaidUri?: vscode.Uri, theme?: ThemeTokens): string {
+function getWebviewContent(content: string, title: string, html2pdfUri: vscode.Uri, nonce: string, cspSource: string, mermaidUri?: vscode.Uri, theme?: ThemeTokens, policy: OversizedBlockPolicy = 'fit'): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -284,7 +293,7 @@ ${getThemeCssVariables(theme || resolveTheme())}
         hr { border: none; border-top: 1px solid var(--pm-horizontal-rule); margin: 16px 0; }
         h1 + p, h2 + p, h3 + p, h4 + p, h5 + p, h6 + p { margin-top: 4px; }
         @media print {
-            body { padding: 5mm; font-size: 11pt; line-height: 1.4; }
+            body { padding: 5mm 2.5mm; font-size: 11pt; line-height: 1.4; }
             h1, h2, h3, h4, h5, h6 { margin: 12pt 0 6pt; page-break-after: avoid; }
             p, li { margin: 4pt 0; }
             pre { page-break-inside: avoid; font-size: 9pt; }
@@ -312,9 +321,12 @@ ${getThemeCssVariables(theme || resolveTheme())}
                 return;
             }
 
+            // Blocks taller than a page would each cost a page-sized gap.
+            ${getPrintFitScript({ marginSideMm: pageMarginSideMm, marginBlockMm: pageMarginBlockMm, rootSelector: '#content', policy })}
+
             html2pdf().set({
                 filename,
-                margin: [10, 10, 10, 10],
+                margin: [${pageMarginBlockMm}, ${pageMarginSideMm}, ${pageMarginBlockMm}, ${pageMarginSideMm}],
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2 },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }

@@ -19,6 +19,13 @@ import { renderMarkdown, containsMermaid } from './markdownRenderer';
 import { getWebviewContent } from '../utils/htmlGenerator';
 import { exportPdfWithWebview } from './webviewPdfExporter';
 import { getMermaidBootScript, getMermaidCleanupScript, mermaidReadyFlag } from '../utils/mermaid';
+import {
+    getPrintFitScript,
+    policyOf,
+    OversizedBlockPolicy,
+    OversizedBlockSetting,
+    PrintFitResult
+} from '../utils/printLayout';
 import { resolveTheme, getMermaidThemeVariables, ThemeTokens } from './themeManager';
 
 /**
@@ -123,6 +130,63 @@ const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-s
 
 /** Diagrams should never hold the export open for long. */
 const mermaidRenderTimeoutMs = 20000;
+
+/** Paper the PDF is printed on, shared by the print-fit pass below. */
+const pageSetup = { pageWidthMm: 210, pageHeightMm: 297, marginSideMm: 5, marginBlockMm: 10 };
+
+/** CSS pixels across the printable width, at the 96 dpi print CSS assumes. */
+const printableWidthPx = Math.round((pageSetup.pageWidthMm - 2 * pageSetup.marginSideMm) * 96 / 25.4);
+
+/** Tall enough that nothing lays out differently for want of viewport. */
+const viewportHeightPx = 1200;
+
+/**
+ * Lay the document out at the width the printer will use.
+ *
+ * Content that does not fit the paper's width — a wide table, a long line of
+ * code — makes Chrome shrink the whole page to fit rather than clip it, and
+ * everything then reflows: a page holds more lines than the printable width
+ * alone suggests. Measuring at that width is what makes the heights this
+ * module works with the printed ones.
+ */
+async function matchPrintLayoutWidth(page: Page): Promise<void> {
+    const overflowWidth = await page.evaluate('document.documentElement.scrollWidth') as number;
+    const layoutWidth = Math.max(printableWidthPx, Math.ceil(overflowWidth));
+    if (layoutWidth !== printableWidthPx) {
+        await page.setViewport({ width: layoutWidth, height: viewportHeightPx });
+    }
+}
+
+/** How the document's oversized diagrams should be printed. */
+function getOversizedDiagramSetting(resource: vscode.Uri): OversizedBlockSetting {
+    return vscode.workspace
+        .getConfiguration('prettyMarkdown', resource)
+        .get<OversizedBlockSetting>('oversizedDiagrams', 'ask');
+}
+
+/**
+ * Offer the choice between the two ways of printing a diagram that cannot
+ * share a page: whole, at the cost of the space left below it, or across the
+ * page break, at the cost of a cut through the drawing.
+ */
+async function askOversizedDiagramPolicy(gaps: PrintFitResult['gaps']): Promise<OversizedBlockPolicy> {
+    const subject = gaps.length === 1 ? 'A diagram is' : `${gaps.length} diagrams are`;
+    const largest = Math.round(Math.max(...gaps.map(gap => gap.gapRatio)) * 100);
+
+    const choice = await vscode.window.showInformationMessage(
+        `${subject} too tall to fit in the space left on the page.`,
+        {
+            modal: true,
+            detail: `Printed whole, each one starts on a fresh page and leaves up to ${largest}% of ` +
+                'the page before it blank. Printed across the page break, no space is wasted, but the ' +
+                'drawing is cut where the page ends.\n\nSet prettyMarkdown.oversizedDiagrams to stop being asked.'
+        },
+        'Print whole',
+        'Split across pages'
+    );
+
+    return choice === 'Split across pages' ? 'split' : 'fit';
+}
 
 /**
  * Packages providing the libraries Chrome most often lacks. Only Linux needs
@@ -553,7 +617,8 @@ async function exportWithoutBrowser(
     fullHtml: string,
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     launchError: unknown,
-    theme: ThemeTokens
+    theme: ThemeTokens,
+    policy: OversizedBlockPolicy
 ): Promise<void> {
     const defaultPath = document.fileName.replace(/\.md$/, '.pdf');
     const pdfPath = await vscode.window.showSaveDialog({
@@ -566,7 +631,7 @@ async function exportWithoutBrowser(
     }
 
     progress.report({ increment: 30, message: 'Chrome unavailable, using built-in converter...' });
-    await exportPdfWithWebview(context, fullHtml, pdfPath, theme);
+    await exportPdfWithWebview(context, fullHtml, pdfPath, theme, policy);
     progress.report({ increment: 40, message: 'Done!' });
 
     // Not awaited: the progress notification stays on screen until this task
@@ -616,7 +681,10 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
             } catch (launchError) {
                 // No usable Chrome on this machine; fall back to the bundled
                 // converter rather than failing the export outright.
-                await exportWithoutBrowser(document, context, fullHtml, progress, launchError, theme);
+                await exportWithoutBrowser(
+                    document, context, fullHtml, progress, launchError, theme,
+                    policyOf(getOversizedDiagramSetting(document.uri))
+                );
                 return;
             }
 
@@ -626,9 +694,33 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
                 const page = await browser.newPage();
                 await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
 
+                // Lay the page out exactly as it will be printed, so diagrams
+                // are drawn at their final width and the fit pass below
+                // measures the heights the printed pages will actually have.
+                await page.emulateMediaType('print');
+                await page.setViewport({ width: printableWidthPx, height: viewportHeightPx });
+
                 if (needsMermaid) {
                     progress.report({ message: 'Rendering diagrams...' });
                     await renderMermaidDiagrams(page, context, theme);
+                }
+
+                await matchPrintLayoutWidth(page);
+
+                // Shrink anything too tall to share a page, which would
+                // otherwise leave a page-sized gap where it did not fit.
+                const setting = getOversizedDiagramSetting(document.uri);
+                const fit = await page.evaluate(
+                    getPrintFitScript({ ...pageSetup, policy: policyOf(setting) })
+                ) as PrintFitResult;
+
+                // Only a diagram kept whole leaves a gap, and only the user can
+                // say whether the gap or a cut diagram is the lesser evil.
+                const stranded = fit.gaps.filter(gap => !gap.split);
+                if (setting === 'ask' && stranded.length > 0) {
+                    if (await askOversizedDiagramPolicy(stranded) === 'split') {
+                        await page.evaluate(getPrintFitScript({ ...pageSetup, policy: 'split' }));
+                    }
                 }
 
                 progress.report({ increment: 30, message: "Generating PDF..." });
@@ -644,10 +736,10 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
                         path: pdfPath.fsPath,
                         format: 'A4',
                         margin: {
-                            top: '10mm',
-                            right: '10mm',
-                            bottom: '10mm',
-                            left: '10mm'
+                            top: `${pageSetup.marginBlockMm}mm`,
+                            right: `${pageSetup.marginSideMm}mm`,
+                            bottom: `${pageSetup.marginBlockMm}mm`,
+                            left: `${pageSetup.marginSideMm}mm`
                         },
                         printBackground: true
                     });

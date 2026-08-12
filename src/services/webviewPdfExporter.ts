@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { getMermaidBootScript, getMermaidCleanupScript, mermaidReadyFlag } from '../utils/mermaid';
+import { getPrintFitScript, OversizedBlockPolicy } from '../utils/printLayout';
 import { ThemeTokens, getMermaidThemeVariables } from './themeManager';
 
 /**
@@ -13,6 +14,10 @@ import { ThemeTokens, getMermaidThemeVariables } from './themeManager';
 
 const conversionTimeoutMs = 120000;
 const mermaidTimeoutMs = 20000;
+
+/** Page margins, in millimetres, of the A4 pages html2pdf produces. */
+const pageMarginSideMm = 5;
+const pageMarginBlockMm = 10;
 
 function getNonce(): string {
     let text = '';
@@ -33,7 +38,8 @@ export function buildConversionDocument(
     nonce: string,
     cspSource: string,
     mermaidUri?: vscode.Uri,
-    theme?: ThemeTokens
+    theme?: ThemeTokens,
+    policy: OversizedBlockPolicy = 'fit'
 ): string {
     const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; ` +
         `img-src ${cspSource} data: https: http:; style-src 'unsafe-inline' ${cspSource}; ` +
@@ -78,8 +84,12 @@ export function buildConversionDocument(
                 whenDiagramsReady().then(() => {
                 ${getMermaidCleanupScript()}
 
+                // Blocks taller than a page would each cost a page-sized gap.
+                ${getPrintFitScript({ marginSideMm: pageMarginSideMm, marginBlockMm: pageMarginBlockMm, policy })}
+
                 html2pdf().set({
-                    margin: [10, 10, 10, 10],
+                    // html2pdf takes margins as [top, left, bottom, right].
+                    margin: [${pageMarginBlockMm}, ${pageMarginSideMm}, ${pageMarginBlockMm}, ${pageMarginSideMm}],
                     image: { type: 'jpeg', quality: 0.98 },
                     html2canvas: {
                         scale: 2,
@@ -125,7 +135,8 @@ export async function exportPdfWithWebview(
     context: vscode.ExtensionContext,
     fullHtml: string,
     targetUri: vscode.Uri,
-    theme?: ThemeTokens
+    theme?: ThemeTokens,
+    policy: OversizedBlockPolicy = 'fit'
 ): Promise<void> {
     const panel = vscode.window.createWebviewPanel(
         'prettyMarkdownPdfExport',
@@ -174,7 +185,9 @@ export async function exportPdfWithWebview(
             });
 
             context.subscriptions.push(messageSubscription, disposeSubscription);
-            panel.webview.html = buildConversionDocument(fullHtml, scriptUri, nonce, panel.webview.cspSource, mermaidUri, theme);
+            panel.webview.html = buildConversionDocument(
+                fullHtml, scriptUri, nonce, panel.webview.cspSource, mermaidUri, theme, policy
+            );
         });
 
         await vscode.workspace.fs.writeFile(targetUri, Buffer.from(base64, 'base64'));
