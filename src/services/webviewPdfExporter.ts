@@ -77,7 +77,20 @@ export function buildConversionDocument(
                 html2pdf().set({
                     margin: [10, 10, 10, 10],
                     image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, logging: false },
+                    html2canvas: {
+                        scale: 2,
+                        useCORS: true,
+                        logging: false,
+                        // html2canvas rasterises a clone of the page, and a
+                        // cloned script executes again inside it. Keep scripts
+                        // and mermaid's leftovers out of the copy entirely.
+                        ignoreElements: (element) => element.tagName === 'SCRIPT',
+                        onclone: (clonedDocument) => {
+                            clonedDocument.querySelectorAll(
+                                'script, .mermaidTooltip, [id^="dpretty-mermaid-"], svg[aria-roledescription="error"]'
+                            ).forEach((node) => node.remove());
+                        }
+                    },
                     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
                     pagebreak: { mode: ['css', 'legacy'] }
                 })

@@ -8,6 +8,9 @@ A beautiful and feature-rich Markdown preview and PDF export extension for Visua
 
 - **Beautiful Preview**: Clean, professional styling with syntax highlighting
 - **PDF Export**: One-click export to high-quality PDF files
+- **Mermaid Diagrams**: `mermaid` code blocks render as diagrams in the preview and in exported PDFs
+- **Local Images**: Images stored next to your Markdown file load in the preview and are embedded in the PDF
+- **Clickable Links**: Jump to other Markdown files and workspace files straight from the preview
 - **Web PDF Download**: Export PDF directly in vscode.dev
 - **Live Preview**: Real-time preview updates as you type
 - **Syntax Highlighting**: Code blocks with vibrant, readable colors
@@ -111,7 +114,14 @@ Currently, Pretty Markdown works with zero configuration. Future versions will i
 ## Requirements
 
 - Visual Studio Code 1.60.0 or higher
-- Node.js (for PDF export functionality)
+
+PDF export uses Chrome for the best results — text stays selectable and searchable. Pretty Markdown reuses a Chrome already on your machine where possible, and offers a one-time download only when it can find none. If no Chrome can run, the export still works using a built-in converter; that PDF is an image, so its text cannot be selected.
+
+On minimal Linux environments such as WSL or containers, Chrome needs a few system libraries. Pretty Markdown names the missing ones and the exact command for your distribution, for example:
+
+```bash
+sudo apt install -y libnspr4 libnss3 libasound2t64
+```
 
 ## Installation
 

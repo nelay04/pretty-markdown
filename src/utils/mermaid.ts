@@ -17,7 +17,11 @@ export const mermaidReadyFlag = '__prettyMarkdownMermaidReady';
 export function getMermaidBootScript(): string {
     return `
         (function () {
-            const blocks = Array.from(document.querySelectorAll('pre.mermaid'));
+            // Only unrendered blocks. Rasterisers such as html2canvas clone the
+            // document, and a cloned <script> runs again in the clone; without
+            // this guard the second pass would feed mermaid the text of the
+            // SVG it just produced and draw an error diagram.
+            const blocks = Array.from(document.querySelectorAll('pre.mermaid:not([data-processed])'));
             if (blocks.length === 0 || typeof mermaid === 'undefined') {
                 window.${mermaidReadyFlag} = true;
                 return;
@@ -27,6 +31,9 @@ export function getMermaidBootScript(): string {
                 startOnLoad: false,
                 theme: 'default',
                 securityLevel: 'strict',
+                // Never inject the "Syntax error" graphic into the page; a bad
+                // diagram keeps its source text instead.
+                suppressErrorRendering: true,
                 fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif"
             });
 
@@ -34,25 +41,41 @@ export function getMermaidBootScript(): string {
             const done = () => {
                 pending -= 1;
                 if (pending <= 0) {
+                    // mermaid leaves measurement containers behind.
+                    document.querySelectorAll('[id^="dpretty-mermaid-"], .mermaidTooltip')
+                        .forEach((leftover) => leftover.remove());
                     window.${mermaidReadyFlag} = true;
                 }
             };
 
+            const fail = (block, error) => {
+                block.setAttribute('data-mermaid-error', String(error && error.message || error).slice(0, 200));
+                done();
+            };
+
             blocks.forEach((block, index) => {
                 const source = block.textContent || '';
-                mermaid.render('pretty-mermaid-' + index, source)
-                    .then((result) => {
-                        block.innerHTML = result.svg;
-                        block.setAttribute('data-processed', 'true');
-                        if (typeof result.bindFunctions === 'function') {
-                            result.bindFunctions(block);
+                const id = 'pretty-mermaid-' + index;
+
+                // parse() reports invalid diagrams without throwing, and
+                // without the side effects render() has.
+                Promise.resolve(mermaid.parse(source, { suppressErrors: true }))
+                    .then((parsed) => {
+                        if (parsed === false) {
+                            fail(block, 'Invalid mermaid syntax');
+                            return;
                         }
-                        done();
+
+                        return mermaid.render(id, source).then((result) => {
+                            block.innerHTML = result.svg;
+                            block.setAttribute('data-processed', 'true');
+                            if (typeof result.bindFunctions === 'function') {
+                                result.bindFunctions(block);
+                            }
+                            done();
+                        });
                     })
-                    .catch((error) => {
-                        block.setAttribute('data-mermaid-error', String(error && error.message || error));
-                        done();
-                    });
+                    .catch((error) => fail(block, error));
             });
         })();
     `;

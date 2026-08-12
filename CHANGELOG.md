@@ -12,7 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Export to HTML functionality
 - Table of contents generation
 - Math equation rendering
-- Mermaid diagram support
+
+## [1.5.0] - 12-08-2026
+
+### Added
+- **Mermaid diagrams**: ` ```mermaid ` and ` ```mmd ` code fences are rendered as diagrams in the preview, in exported PDFs, and in the web build. A diagram that fails to parse keeps its source text instead of breaking the document, and mermaid's "Syntax error" graphic is never drawn into the page.
+- **Local images**: Images referenced relative to the Markdown file now load in the preview and are embedded in exported PDFs.
+- **Clickable links in the preview**: Links to other Markdown files and workspace files open in the editor, and `http(s)`/`mailto` links open in the browser. In-page `#anchor` links still scroll within the preview.
+- **PDF export without Chrome**: When no usable Chrome is available, the export falls back to the bundled converter instead of failing. The resulting PDF is an image, so its text is not selectable, and the reason is shown alongside it.
+
+### Changed
+- **Chrome is reused, not re-downloaded**: The browser is looked up in `PUPPETEER_EXECUTABLE_PATH`, the shared `~/.cache/puppeteer` cache, the previous per-profile cache, and finally the system installation. Any existing build is used instead of downloading the newest release, and downloads are shared across VS Code stable, Insiders, and the Extension Development Host.
+- **The Chrome download is now opt-in**, shown with its size, and offered only on systems that can actually run Chrome.
+- **Download progress** reports the real percentage and total size.
+
+### Fixed
+- **Export notification no longer sticks**: a browser that failed to exit kept the "Exporting to PDF..." notification on screen indefinitely. The browser is now closed with a timeout and force-terminated if needed, and is always released even when the save dialog is cancelled.
+- **Interrupted browser downloads self-heal**: a partial download previously failed every later export with `end of central directory record signature not found`. The incomplete files are now cleared and the download is retried.
+- **Missing Linux libraries are reported clearly**: instead of a raw loader error, the export names every missing library and the exact install command for the detected distribution (apt, dnf, or pacman).
+- Security advisories in dependencies resolved; `npm audit` reports no vulnerabilities.
 
 ## [1.4.0] - 15-02-2026
 
