@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js';
+import { getMermaidBootScript } from './utils/mermaid';
 
 let previewPanel: vscode.WebviewPanel | undefined;
 
@@ -90,8 +91,13 @@ function updatePreview(document: vscode.TextDocument, context: vscode.ExtensionC
     const html = renderMarkdown(document.getText());
     const title = getDocumentTitle(document);
     const scriptUri = getHtml2PdfScriptUri(previewPanel.webview, context);
+    const mermaidUri = html.includes('<pre class="mermaid">')
+        ? getMermaidScriptUri(previewPanel.webview, context)
+        : undefined;
     const nonce = getNonce();
-    previewPanel.webview.html = getWebviewContent(html, title, scriptUri, nonce, previewPanel.webview.cspSource);
+    previewPanel.webview.html = getWebviewContent(
+        html, title, scriptUri, nonce, previewPanel.webview.cspSource, mermaidUri
+    );
 }
 
 function getDocumentTitle(document: vscode.TextDocument): string {
@@ -117,6 +123,10 @@ function renderMarkdown(markdown: string): string {
         linkify: true,
         typographer: true,
         highlight: (str: string, lang: string) => {
+            if (lang && (lang.toLowerCase() === 'mermaid' || lang.toLowerCase() === 'mmd')) {
+                return `<pre class="mermaid">${escapeHtml(str)}</pre>`;
+            }
+
             if (lang && hljs.getLanguage(lang)) {
                 try {
                     return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang }).value}</code></pre>`;
@@ -137,6 +147,12 @@ function getHtml2PdfScriptUri(webview: vscode.Webview, context: vscode.Extension
     );
 }
 
+function getMermaidScriptUri(webview: vscode.Webview, context: vscode.ExtensionContext): vscode.Uri {
+    return webview.asWebviewUri(
+        vscode.Uri.joinPath(context.extensionUri, 'media', 'vendor', 'mermaid.min.js')
+    );
+}
+
 function getNonce(): string {
     let text = '';
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -146,7 +162,7 @@ function getNonce(): string {
     return text;
 }
 
-function getWebviewContent(content: string, title: string, html2pdfUri: vscode.Uri, nonce: string, cspSource: string): string {
+function getWebviewContent(content: string, title: string, html2pdfUri: vscode.Uri, nonce: string, cspSource: string, mermaidUri?: vscode.Uri): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -275,6 +291,9 @@ function getWebviewContent(content: string, title: string, html2pdfUri: vscode.U
         }
         tr:nth-child(even) { background: #fafafa; }
         img { max-width: 100%; height: auto; margin: 12px 0; }
+        pre.mermaid { background: #ffffff; border: none; padding: 8px 0; margin: 12px 0; text-align: center; overflow-x: auto; page-break-inside: avoid; }
+        pre.mermaid svg { max-width: 100%; height: auto; }
+        pre.mermaid:not([data-processed]) { color: #555555; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85em; text-align: left; }
         hr { border: none; border-top: 1px solid #cccccc; margin: 16px 0; }
         h1 + p, h2 + p, h3 + p, h4 + p, h5 + p, h6 + p { margin-top: 4px; }
         @media print {
@@ -289,8 +308,11 @@ function getWebviewContent(content: string, title: string, html2pdfUri: vscode.U
     <div id="content">
         ${content}
     </div>
+    ${mermaidUri ? `<script nonce="${nonce}" src="${mermaidUri}"></script>` : ''}
     <script nonce="${nonce}" src="${html2pdfUri}"></script>
     <script nonce="${nonce}">
+        ${mermaidUri ? getMermaidBootScript() : ''}
+
         window.addEventListener('message', (event) => {
             const message = event.data;
             if (!message || message.type !== 'export-pdf') {

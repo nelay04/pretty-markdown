@@ -3,7 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { execFileSync } from 'child_process';
-import puppeteer, { Browser as PuppeteerBrowser } from 'puppeteer-core';
+import { pathToFileURL } from 'url';
+import puppeteer, { Browser as PuppeteerBrowser, Page } from 'puppeteer-core';
 import {
     Browser,
     BrowserPlatform,
@@ -14,9 +15,10 @@ import {
     computeSystemExecutablePath,
     getInstalledBrowsers,
 } from '@puppeteer/browsers';
-import { renderMarkdown } from './markdownRenderer';
+import { renderMarkdown, containsMermaid } from './markdownRenderer';
 import { getWebviewContent } from '../utils/htmlGenerator';
 import { exportPdfWithWebview } from './webviewPdfExporter';
+import { getMermaidBootScript, mermaidReadyFlag } from '../utils/mermaid';
 
 /**
  * Shared download location, deliberately not inside globalStorageUri: that path
@@ -117,6 +119,9 @@ function removeBrokenInstall(cacheDir: string, buildId: string, platform: Browse
 }
 
 const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
+
+/** Diagrams should never hold the export open for long. */
+const mermaidRenderTimeoutMs = 20000;
 
 /**
  * Packages providing the libraries Chrome most often lacks. Only Linux needs
@@ -474,6 +479,68 @@ async function closeBrowserSafely(browser: PuppeteerBrowser): Promise<void> {
     }
 }
 
+const imageMimeTypes: { [extension: string]: string } = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+    '.ico': 'image/x-icon',
+    '.avif': 'image/avif'
+};
+
+/** Images beyond this are left as a link rather than inlined. */
+const maxInlineImageBytes = 20 * 1024 * 1024;
+
+/**
+ * Inline a local image as a data URI.
+ *
+ * Both export paths need this: Chrome refuses to load file:// subresources
+ * into a page created with setContent, and the fallback webview may only read
+ * from the extension's own folder.
+ */
+function inlineImage(absolutePath: string): string | undefined {
+    try {
+        const stats = fs.statSync(absolutePath);
+        if (!stats.isFile() || stats.size > maxInlineImageBytes) {
+            return undefined;
+        }
+
+        const mimeType = imageMimeTypes[path.extname(absolutePath).toLowerCase()];
+        if (!mimeType) {
+            return undefined;
+        }
+
+        return `data:${mimeType};base64,${fs.readFileSync(absolutePath).toString('base64')}`;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * Draw the page's mermaid diagrams before printing.
+ *
+ * Diagram failures must not sink the export, so a timeout or a missing library
+ * simply leaves the diagram as its source text in the PDF.
+ */
+async function renderMermaidDiagrams(page: Page, context: vscode.ExtensionContext): Promise<void> {
+    const mermaidPath = path.join(context.extensionPath, 'media', 'vendor', 'mermaid.min.js');
+
+    if (!fs.existsSync(mermaidPath)) {
+        return;
+    }
+
+    try {
+        await page.addScriptTag({ path: mermaidPath });
+        await page.evaluate(getMermaidBootScript());
+        await page.waitForFunction(`window.${mermaidReadyFlag} === true`, { timeout: mermaidRenderTimeoutMs });
+    } catch {
+        // Leave the source text in place rather than failing the export.
+    }
+}
+
 /**
  * Fallback export for machines where Chrome cannot run. Produces a rasterised
  * PDF, so the reason Chrome was unavailable is surfaced to the user.
@@ -516,8 +583,20 @@ async function exportWithoutBrowser(
  * Export markdown document to PDF
  */
 export async function exportToPDF(document: vscode.TextDocument, context: vscode.ExtensionContext) {
-    const html = renderMarkdown(document.getText());
+    const documentDir = path.dirname(document.fileName);
+
+    const html = renderMarkdown(document.getText(), {
+        resolveImage: (src) => {
+            try {
+                const absolutePath = path.resolve(documentDir, decodeURIComponent(src));
+                return inlineImage(absolutePath) || pathToFileURL(absolutePath).toString();
+            } catch {
+                return src;
+            }
+        }
+    });
     const fullHtml = getWebviewContent(html, path.basename(document.fileName));
+    const needsMermaid = containsMermaid(html);
 
     vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
@@ -542,6 +621,11 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
             try {
                 const page = await browser.newPage();
                 await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+
+                if (needsMermaid) {
+                    progress.report({ message: 'Rendering diagrams...' });
+                    await renderMermaidDiagrams(page, context);
+                }
 
                 progress.report({ increment: 30, message: "Generating PDF..." });
 

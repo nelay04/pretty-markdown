@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { getMermaidBootScript, mermaidReadyFlag } from '../utils/mermaid';
 
 /**
  * PDF export that needs no browser download: the page is rendered in a webview
@@ -10,6 +11,7 @@ import * as vscode from 'vscode';
  */
 
 const conversionTimeoutMs = 120000;
+const mermaidTimeoutMs = 20000;
 
 function getNonce(): string {
     let text = '';
@@ -24,12 +26,19 @@ function getNonce(): string {
  * Inject the converter into the already-styled preview document, so the
  * fallback produces the same layout the Chrome path does.
  */
-export function buildConversionDocument(fullHtml: string, scriptUri: vscode.Uri, nonce: string, cspSource: string): string {
+export function buildConversionDocument(
+    fullHtml: string,
+    scriptUri: vscode.Uri,
+    nonce: string,
+    cspSource: string,
+    mermaidUri?: vscode.Uri
+): string {
     const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; ` +
         `img-src ${cspSource} data: https: http:; style-src 'unsafe-inline' ${cspSource}; ` +
         `font-src ${cspSource} data:; script-src 'nonce-${nonce}';">`;
 
     const scripts = `
+    ${mermaidUri ? `<script nonce="${nonce}" src="${mermaidUri}"></script>` : ''}
     <script nonce="${nonce}" src="${scriptUri}"></script>
     <script nonce="${nonce}">
         (function () {
@@ -41,12 +50,30 @@ export function buildConversionDocument(fullHtml: string, scriptUri: vscode.Uri,
 
             window.addEventListener('error', (event) => fail(event.message));
 
+            // Diagrams have to finish drawing before the page is rasterised.
+            function whenDiagramsReady() {
+                ${mermaidUri ? getMermaidBootScript() : `window.${mermaidReadyFlag} = true;`}
+
+                return new Promise((resolve) => {
+                    const deadline = Date.now() + ${mermaidTimeoutMs};
+                    const poll = () => {
+                        if (window.${mermaidReadyFlag} === true || Date.now() > deadline) {
+                            resolve();
+                            return;
+                        }
+                        setTimeout(poll, 100);
+                    };
+                    poll();
+                });
+            }
+
             window.addEventListener('load', () => {
                 if (typeof html2pdf === 'undefined') {
                     fail('html2pdf failed to load');
                     return;
                 }
 
+                whenDiagramsReady().then(() => {
                 html2pdf().set({
                     margin: [10, 10, 10, 10],
                     image: { type: 'jpeg', quality: 0.98 },
@@ -60,6 +87,7 @@ export function buildConversionDocument(fullHtml: string, scriptUri: vscode.Uri,
                         vscodeApi.postMessage({ type: 'pdf-ready', data: String(dataUri).split(',')[1] });
                     })
                     .catch(fail);
+                }).catch(fail);
             });
         })();
     </script>`;
@@ -96,6 +124,11 @@ export async function exportPdfWithWebview(
         const scriptUri = panel.webview.asWebviewUri(
             vscode.Uri.joinPath(context.extensionUri, 'media', 'vendor', 'html2pdf.bundle.min.js')
         );
+        const mermaidUri = fullHtml.includes('<pre class="mermaid">')
+            ? panel.webview.asWebviewUri(
+                vscode.Uri.joinPath(context.extensionUri, 'media', 'vendor', 'mermaid.min.js')
+            )
+            : undefined;
         const nonce = getNonce();
 
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -123,7 +156,7 @@ export async function exportPdfWithWebview(
             });
 
             context.subscriptions.push(messageSubscription, disposeSubscription);
-            panel.webview.html = buildConversionDocument(fullHtml, scriptUri, nonce, panel.webview.cspSource);
+            panel.webview.html = buildConversionDocument(fullHtml, scriptUri, nonce, panel.webview.cspSource, mermaidUri);
         });
 
         await vscode.workspace.fs.writeFile(targetUri, Buffer.from(base64, 'base64'));

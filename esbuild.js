@@ -10,18 +10,27 @@ const watch = process.argv.includes('--watch');
  * extension can serve. node_modules is excluded from the .vsix, hence the copy
  * into media/.
  */
-function vendorHtml2Pdf() {
-	const source = path.join(__dirname, 'node_modules', 'html2pdf.js', 'dist', 'html2pdf.bundle.min.js');
+function vendorBrowserLibraries() {
 	const targetDir = path.join(__dirname, 'media', 'vendor');
-	const target = path.join(targetDir, 'html2pdf.bundle.min.js');
-
-	if (!fs.existsSync(source)) {
-		throw new Error(`Cannot vendor html2pdf: ${source} is missing. Run npm install first.`);
-	}
+	const libraries = [
+		['html2pdf.js', 'dist', 'html2pdf.bundle.min.js'],
+		['mermaid', 'dist', 'mermaid.min.js']
+	];
 
 	fs.mkdirSync(targetDir, { recursive: true });
-	fs.copyFileSync(source, target);
-	console.log('[build] vendored html2pdf into media/vendor');
+
+	for (const parts of libraries) {
+		const source = path.join(__dirname, 'node_modules', ...parts);
+		const name = parts[parts.length - 1];
+
+		if (!fs.existsSync(source)) {
+			throw new Error(`Cannot vendor ${name}: ${source} is missing. Run npm install first.`);
+		}
+
+		fs.copyFileSync(source, path.join(targetDir, name));
+	}
+
+	console.log('[build] vendored browser libraries into media/vendor');
 }
 
 /**
@@ -45,7 +54,7 @@ const esbuildProblemMatcherPlugin = {
 };
 
 async function main() {
-	vendorHtml2Pdf();
+	vendorBrowserLibraries();
 
 	const buildConfigs = [
 		{

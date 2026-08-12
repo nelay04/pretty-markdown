@@ -1,13 +1,20 @@
+export interface WebviewContentOptions {
+    /** Injected verbatim into <head>, e.g. a Content-Security-Policy meta tag. */
+    head?: string;
+    /** Injected just before </body>, e.g. mermaid or link handling scripts. */
+    scripts?: string;
+}
+
 /**
  * Generate complete HTML content for webview preview
  */
-export function getWebviewContent(content: string, title: string): string {
+export function getWebviewContent(content: string, title: string, options: WebviewContentOptions = {}): string {
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${title}</title>
+    <title>${title}</title>${options.head ? `\n    ${options.head}` : ''}
     <style>
         /* Pretty Markdown Color Palette */
         :root {
@@ -193,6 +200,30 @@ export function getWebviewContent(content: string, title: string): string {
             height: auto;
             margin: 12px 0;
         }
+
+        /* Mermaid diagrams */
+        pre.mermaid {
+            background: #ffffff;
+            border: none;
+            padding: 8px 0;
+            margin: 12px 0;
+            text-align: center;
+            overflow-x: auto;
+            page-break-inside: avoid;
+        }
+
+        pre.mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Until mermaid has run, show the source rather than a flash of raw text */
+        pre.mermaid:not([data-processed]) {
+            color: #555555;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.85em;
+            text-align: left;
+        }
         
         /* Horizontal rule */
         hr {
@@ -231,7 +262,7 @@ export function getWebviewContent(content: string, title: string): string {
     </style>
 </head>
 <body>
-    ${content}
+    ${content}${options.scripts ? `\n${options.scripts}` : ''}
 </body>
 </html>`;
 }

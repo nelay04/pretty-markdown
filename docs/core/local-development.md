@@ -93,7 +93,30 @@ Changes to `package.json` — new commands, menus, keybindings, activation event
 
 ---
 
-## 5. PDF export in development
+## 5. Diagrams, images and links
+
+**Mermaid** is rendered in the browser, never in the extension host. ` ```mermaid ` (or ` ```mmd `) fences become `<pre class="mermaid">` in [markdownRenderer.ts](../../src/services/markdownRenderer.ts), and every target runs the same boot script from [utils/mermaid.ts](../../src/utils/mermaid.ts):
+
+| Target | Loads mermaid via | Knows it finished by |
+|---|---|---|
+| Preview webview | `asWebviewUri` | nothing — it renders as you watch |
+| Chrome PDF export | `page.addScriptTag({ path })` | `waitForFunction` on the ready flag |
+| Browserless fallback | `asWebviewUri` | polls the ready flag before rasterising |
+
+The 3.5 MB library is only injected when the document actually contains a diagram. A diagram that fails to parse keeps its source text and marks itself with `data-mermaid-error`; it never aborts the render, so one bad diagram cannot cost you the document.
+
+**Images** resolve differently per target, which is why `renderMarkdown` takes a `resolveImage` hook rather than hardcoding one scheme:
+
+- *Preview* → `webview.asWebviewUri`, with the document folder, workspace folders and the extension added to `localResourceRoots`.
+- *Both PDF paths* → inlined as `data:` URIs. This is not an optimisation: Chrome refuses to load `file://` subresources into a page built with `setContent`, and the fallback webview may only read from the extension's own folder. Anything over 20 MB or of an unknown type falls back to a `file://` URL.
+
+Images written as raw `<img>` HTML are rewritten too, since those bypass markdown-it's image rule.
+
+**Links** in the preview are intercepted in the webview and posted to the extension host, which routes them: `http(s)`/`mailto` open externally, everything else resolves relative to the markdown file and opens through `vscode.open`. Fragments and query strings are stripped before touching the filesystem, and `#anchor` links are left alone so in-page scrolling still works.
+
+---
+
+## 6. PDF export in development
 
 There are two export engines. Chrome is preferred because it produces a real vector PDF with selectable text; `src/services/webviewPdfExporter.ts` is the fallback for machines where Chrome cannot run, converting the page with html2pdf.js in a webview. That output is rasterised — no selectable text, and roughly 3× the file size (117 KB vs 36 KB on the sample document) — so it is only used when Chrome is unavailable, and the user is told why.
 
@@ -135,7 +158,7 @@ The web build (`extension.web.ts`) has no puppeteer at all; it exports via the b
 
 ---
 
-## 6. Testing the web build
+## 7. Testing the web build
 
 The `browser` entry point cannot be exercised with F5 — that runs the desktop host. To test it:
 
@@ -147,7 +170,7 @@ This opens vscode.dev-in-a-browser against the repo. Keep `npm run watch` runnin
 
 ---
 
-## 7. Running tests
+## 8. Running tests
 
 ```bash
 npm test   # runs pretest (compile + lint), then vscode-test
@@ -157,7 +180,7 @@ npm test   # runs pretest (compile + lint), then vscode-test
 
 ---
 
-## 8. Dependency hygiene
+## 9. Dependency hygiene
 
 `npm audit` should report **0 vulnerabilities**. Two things keep it there, and both matter if you touch `package.json`:
 
@@ -183,7 +206,7 @@ Do not bump `puppeteer-core` to 22+ casually. From v22 the launcher switched fro
 
 If you do upgrade, actually export a PDF and confirm the file is written — a type-check and a build both pass while the export is broken.
 
-## 9. Packaging a local build
+## 10. Packaging a local build
 
 ```bash
 npm run package        # @vscode/vsce -> pretty-markdown-<version>.vsix
@@ -192,13 +215,13 @@ code --install-extension pretty-markdown-1.4.0.vsix
 
 `vscode:prepublish` runs `package-build`, so the packaged bundle is always minified and sourcemap-free. `.vsix` files are gitignored.
 
-Both webview-based exporters load html2pdf from `media/vendor/html2pdf.bundle.min.js`, which `esbuild.js` copies out of `node_modules` on every build. That copy exists because `.vscodeignore` excludes `node_modules/**`: loading the library straight from `node_modules`, as the web build used to, works in the Extension Development Host but not from a packaged `.vsix`. `media/vendor/` is generated, so it is gitignored — run a build before packaging, which `vscode:prepublish` does for you.
+Both webview-based exporters load their browser libraries from `media/vendor/`, which `esbuild.js` copies out of `node_modules` on every build (`html2pdf.bundle.min.js` and `mermaid.min.js`). That copy exists because `.vscodeignore` excludes `node_modules/**`: loading the library straight from `node_modules`, as the web build used to, works in the Extension Development Host but not from a packaged `.vsix`. `media/vendor/` is generated, so it is gitignored — run a build before packaging, which `vscode:prepublish` does for you.
 
 Uninstall the local build before going back to a marketplace version, or the two will conflict on the same extension id (`mistx.pretty-markdown`).
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
