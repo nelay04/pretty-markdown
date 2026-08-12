@@ -1,0 +1,1 @@
+../../.github/prompts/create-commit-title.prompt.md
