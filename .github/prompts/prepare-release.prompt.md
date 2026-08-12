@@ -40,24 +40,36 @@ Turn the CHANGELOG entries that have not been released yet into one release: a t
   - One line per change, in the user-facing terms the CHANGELOG already uses. Shorten its wording; do not restate the mechanics.
   - Lead with what a user of the extension gets. Say which surface is affected — the preview, the PDF export, or the web build — when a change touches only one of them.
 
+### The notes must paste into a GitHub release unchanged
+The notes go in their own Markdown file, `docs/devdocs/release/notes/v<version>.md` — **never inside the JSON log**. A JSON string cannot hold a real line break, so a note kept there reaches GitHub carrying `\n` escapes (one escaped string) or quotes and commas (an array of lines). The `.md` file is the release body itself: open it, select all, paste into GitHub, publish. Nothing is unescaped, joined, or stripped on the way.
+
+Write GitHub-flavoured Markdown and nothing else:
+- The file holds **only** the body. No release title, no version heading, no front matter — GitHub already has the title in its own field.
+- **Real line breaks only.** Never write a literal `\n`, `\t`, or any other escape sequence; press the newline.
+- `###` for the group headings, `-` for bullets, and **one blank line between a group's last bullet and the next `###`**. Without that blank line GitHub swallows the heading into the preceding list.
+- Open each bullet with a short bold lead-in, then a colon and the detail: `- **Themes and per-component colours**: pick ...`. This matches the CHANGELOG and gives the release page a scannable left edge.
+- Backticks for setting ids, commands, values, and paths (`prettyMarkdown.theme`). No HTML, no tables, no images, no heading above `###`, and no trailing whitespace.
+
 ## How to log it
 1. Take the timestamp by running exactly this, and use its output verbatim:
    ```@terminal
    node -e "console.log(new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date()).replace(/[,\s]+/g, '-'))"
    ```
-2. Append one object to the array in `docs/devdocs/release/releases.jsonc`, keeping the newest last:
+2. Write the notes to `docs/devdocs/release/notes/v<version>.md`, creating the `notes/` folder if it is not there.
+3. Append one object to the array in `docs/devdocs/release/releases.jsonc`, keeping the newest last:
    ```jsonc
    {
      "releaseName": "1.7.0",
      "dated": "13-Aug-2026-01:47-am",
      "releaseTitle": "Release v1.7.0",
-     "releaseNote": "### Added\n- ...\n\n### Fixed\n- ..."
+     "releaseNoteFile": "notes/v1.7.0.md"
    }
    ```
-3. Stamp the CHANGELOG when `Unreleased` was part of the release: rename that heading to `## [<version>] - <DD-MM-YYYY>` and put a fresh `## [Unreleased]` above it, carrying `### Planned` over unchanged. Without this the same work is offered again next time.
+   `releaseNoteFile` is relative to the log file, and the note text is never duplicated into the JSON.
+4. Stamp the CHANGELOG when `Unreleased` was part of the release: rename that heading to `## [<version>] - <DD-MM-YYYY>` and put a fresh `## [Unreleased]` above it, carrying `### Planned` over unchanged. Without this the same work is offered again next time.
 
 ## Final output
-- Print the release title on its own line, then the release notes as Markdown, then the path of the log file you appended to. No commentary around them.
+- Print the release title on its own line, then the path of the notes file to copy into GitHub's release body, then the path of the log file you appended to. No commentary around them, and do not reprint the notes — the file is the copy.
 
 ## Not in scope
 Bumping the version in `package.json`, tagging, and publishing belong to the release commit (`chore(release): vX.Y.Z`), not to this prompt.
