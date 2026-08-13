@@ -18,6 +18,7 @@ const mermaidTimeoutMs = 20000;
 /** Page margins, in millimetres, of the A4 pages html2pdf produces. */
 const pageMarginSideMm = 5;
 const pageMarginBlockMm = 10;
+const pageWidthMm = 210;
 
 function getNonce(): string {
     let text = '';
@@ -84,17 +85,27 @@ export function buildConversionDocument(
                 whenDiagramsReady().then(() => {
                 ${getMermaidCleanupScript()}
 
+                // html2canvas rasterises the on-screen layout and html2pdf
+                // then drops that image onto the page. A margin on the page
+                // leaves bare paper around it, which frames a themed document
+                // in white, so the margins are moved into the layout instead.
+                const rasterWidth = document.body.getBoundingClientRect().width;
+                document.body.style.padding =
+                    (rasterWidth * ${pageMarginBlockMm} / ${pageWidthMm}) + 'px ' +
+                    (rasterWidth * ${pageMarginSideMm} / ${pageWidthMm}) + 'px';
+
                 // Blocks taller than a page would each cost a page-sized gap.
-                ${getPrintFitScript({ marginSideMm: pageMarginSideMm, marginBlockMm: pageMarginBlockMm, policy })}
+                ${getPrintFitScript({ marginSideMm: 0, marginBlockMm: 0, policy })}
 
                 html2pdf().set({
                     // html2pdf takes margins as [top, left, bottom, right].
-                    margin: [${pageMarginBlockMm}, ${pageMarginSideMm}, ${pageMarginBlockMm}, ${pageMarginSideMm}],
+                    margin: [0, 0, 0, 0],
                     image: { type: 'jpeg', quality: 0.98 },
                     html2canvas: {
                         scale: 2,
                         useCORS: true,
                         logging: false,
+                        backgroundColor: ${JSON.stringify(theme ? theme.background : '#ffffff')},
                         // html2canvas rasterises a clone of the page, and a
                         // cloned script executes again inside it. Keep scripts
                         // and mermaid's leftovers out of the copy entirely.

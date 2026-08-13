@@ -236,6 +236,7 @@ Uninstall the local build before going back to a marketplace version, or the two
 
 ## Related
 
+- [`architecture.md`](architecture.md) — modules, the render pipeline, and where to add things
 - [`vsc-extension-quickstart.md`](../../vsc-extension-quickstart.md) — the generator's original notes
 - [VS Code Extension API](https://code.visualstudio.com/api)
 - [Bundling extensions](https://code.visualstudio.com/api/working-with-extensions/bundling-extension)

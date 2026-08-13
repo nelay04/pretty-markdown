@@ -109,7 +109,7 @@ Pretty Markdown works with zero configuration, and the colours can be changed wh
 
 | Setting | Description |
 |---------|-------------|
-| `prettyMarkdown.theme` | `default`, `github`, `dark`, or `sepia` |
+| `prettyMarkdown.theme` | `default` (Pretty Light), `github` (GitHub), `dark` (Pretty Dark), or `sepia` (Sepia) |
 | `prettyMarkdown.colors` | Per-component overrides applied on top of the theme |
 | `prettyMarkdown.oversizedDiagrams` | What to do in a PDF when a diagram or image is too tall to fit in the space left on the page: `ask` (the default), `keepWhole`, or `split` |
 

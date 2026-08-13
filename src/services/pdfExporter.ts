@@ -134,6 +134,22 @@ const mermaidRenderTimeoutMs = 20000;
 /** Paper the PDF is printed on, shared by the print-fit pass below. */
 const pageSetup = { pageWidthMm: 210, pageHeightMm: 297, marginSideMm: 5, marginBlockMm: 10 };
 
+/**
+ * Fills the page margins with the theme background.
+ *
+ * Chrome paints a page's background inside the margin box only, so a themed
+ * document comes out framed in white paper. Header and footer templates are
+ * the one thing that renders in the margin area, and a fixed-position element
+ * in one is laid out against the whole page rather than its own band. The
+ * frame covers the margins and nothing else, so it cannot hide content.
+ */
+function getPageMarginFrame(theme: ThemeTokens): string {
+    return '<div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;' +
+        'position:fixed;top:0;left:0;width:100vw;height:100vh;box-sizing:border-box;' +
+        `border-style:solid;border-color:${theme.background};` +
+        `border-width:${pageSetup.marginBlockMm}mm ${pageSetup.marginSideMm}mm;"></div>`;
+}
+
 /** CSS pixels across the printable width, at the 96 dpi print CSS assumes. */
 const printableWidthPx = Math.round((pageSetup.pageWidthMm - 2 * pageSetup.marginSideMm) * 96 / 25.4);
 
@@ -741,7 +757,11 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
                             bottom: `${pageSetup.marginBlockMm}mm`,
                             left: `${pageSetup.marginSideMm}mm`
                         },
-                        printBackground: true
+                        printBackground: true,
+                        // Paints the margins, which printBackground does not.
+                        displayHeaderFooter: true,
+                        headerTemplate: getPageMarginFrame(theme),
+                        footerTemplate: '<span></span>'
                     });
 
                     progress.report({ increment: 20, message: "Done!" });

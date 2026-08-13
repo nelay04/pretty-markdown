@@ -41,6 +41,17 @@ export interface ThemeTokens {
 
 export type ThemeName = 'default' | 'github' | 'dark' | 'sepia';
 
+/**
+ * What each preset is called in the UI. The setting values are kept as they
+ * were so existing settings.json files keep working.
+ */
+export const themeLabels: { [name in ThemeName]: string } = {
+    default: 'Pretty Light',
+    github: 'GitHub',
+    dark: 'Pretty Dark',
+    sepia: 'Sepia'
+};
+
 /** The look the extension has always shipped; the baseline every theme extends. */
 const defaultTheme: ThemeTokens = {
     background: '#ffffff',
@@ -128,7 +139,7 @@ const darkTheme: ThemeTokens = {
     tableRowAlternate: '#252526',
     tableBorder: '#3c3c3c',
     horizontalRule: '#3c3c3c',
-    diagramBackground: '#ffffff',
+    diagramBackground: '#1e1e1e',
     syntaxKeyword: '#569cd6',
     syntaxString: '#ce9178',
     syntaxComment: '#6a9955',
@@ -249,22 +260,81 @@ export function isDarkTheme(theme: ThemeTokens): boolean {
 /**
  * Mermaid draws its own SVG, so it needs the palette handed to it separately.
  * Uses mermaid's 'base' theme, which exists to be overridden like this.
+ *
+ * Every surface is pinned, not just the three base colours. Mermaid derives
+ * the rest by lightening and darkening those, and on a dark palette the
+ * derived shades drift apart: clusters, notes and actors each ended up a
+ * different grey, and edge labels kept the light default.
  */
 export function getMermaidThemeVariables(theme: ThemeTokens): { [key: string]: string } {
+    const canvas = theme.diagramBackground;
+    const surface = theme.tableHeaderBackground;
+    const panel = theme.blockquoteBackground;
+    const border = theme.tableBorder;
+    const text = theme.text;
+
     return {
-        background: theme.diagramBackground,
-        primaryColor: theme.tableHeaderBackground,
-        primaryTextColor: theme.text,
-        primaryBorderColor: theme.tableBorder,
-        secondaryColor: theme.blockquoteBackground,
+        background: canvas,
+
+        primaryColor: surface,
+        primaryTextColor: text,
+        primaryBorderColor: border,
+        secondaryColor: panel,
+        secondaryTextColor: text,
+        secondaryBorderColor: border,
         tertiaryColor: theme.inlineCodeBackground,
-        mainBkg: theme.tableHeaderBackground,
-        nodeBorder: theme.tableBorder,
+        tertiaryTextColor: text,
+        tertiaryBorderColor: border,
+
+        mainBkg: surface,
+        nodeBorder: border,
+        nodeTextColor: text,
         lineColor: theme.blockquoteText,
-        textColor: theme.text,
-        clusterBkg: theme.blockquoteBackground,
-        clusterBorder: theme.tableBorder,
-        edgeLabelBackground: theme.diagramBackground,
-        titleColor: theme.heading
+        textColor: text,
+        titleColor: theme.heading,
+        altBackground: panel,
+
+        clusterBkg: panel,
+        clusterBorder: border,
+
+        edgeLabelBackground: canvas,
+        labelBackground: canvas,
+        labelTextColor: text,
+        labelBoxBkgColor: surface,
+        labelBoxBorderColor: border,
+
+        noteBkgColor: panel,
+        noteTextColor: text,
+        noteBorderColor: border,
+
+        actorBkg: surface,
+        actorBorder: border,
+        actorTextColor: text,
+        actorLineColor: theme.blockquoteText,
+        signalColor: theme.blockquoteText,
+        signalTextColor: text,
+        activationBkgColor: panel,
+        activationBorderColor: border,
+        // Drawn inside a disc filled with lineColor, so it takes the canvas.
+        sequenceNumberColor: canvas,
+        loopTextColor: text,
+
+        sectionBkgColor: canvas,
+        sectionBkgColor2: canvas,
+        altSectionBkgColor: panel,
+        gridColor: border,
+        taskBkgColor: surface,
+        taskBorderColor: border,
+        taskTextColor: text,
+        taskTextLightColor: text,
+        taskTextDarkColor: text,
+        taskTextOutsideColor: text,
+        activeTaskBkgColor: panel,
+        activeTaskBorderColor: theme.link,
+        doneTaskBkgColor: canvas,
+        doneTaskBorderColor: border,
+
+        attributeBackgroundColorOdd: surface,
+        attributeBackgroundColorEven: panel
     };
 }

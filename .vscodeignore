@@ -18,3 +18,4 @@ CONTRIBUTING.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+CLAUDE.md

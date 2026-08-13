@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Themes have names**: The `default` and `dark` presets are now shown as **Pretty Light** and **Pretty Dark** in the settings page and in the VS Code settings editor. The values written to `settings.json` are unchanged, so existing configurations keep working.
+
+### Fixed
+- **Diagrams match the rest of a dark page**: On the Pretty Dark theme, diagrams were drawn on a white canvas inside a dark document, and clusters, notes and sequence actors each picked up a slightly different grey. Every diagram surface now comes from the theme, so a diagram is one flat colour with the page around it.
+- **Exported PDFs are no longer framed in white**: A themed export left the page margins as bare white paper, which was clearly visible on Pretty Dark. The margins now carry the theme background, in both the Chrome and the built-in export.
+
 ### Planned
 - Export to HTML functionality
 - Table of contents generation

@@ -243,11 +243,17 @@
             "dark",
             "sepia"
           ],
+          "enumItemLabels": [
+            "Pretty Light",
+            "GitHub",
+            "Pretty Dark",
+            "Sepia"
+          ],
           "enumDescriptions": [
-            "The original Pretty Markdown palette",
-            "Light palette close to GitHub rendered Markdown",
-            "Dark palette suited to dark editors",
-            "Warm, low-contrast palette for long reading"
+            "Pretty Light - the original Pretty Markdown palette",
+            "GitHub - light palette close to GitHub rendered Markdown",
+            "Pretty Dark - dark palette suited to dark editors",
+            "Sepia - warm, low-contrast palette for long reading"
           ],
           "default": "default",
           "markdownDescription": "Colour theme for the preview and exported PDFs. Individual components can be overridden with `#prettyMarkdown.colors#`."

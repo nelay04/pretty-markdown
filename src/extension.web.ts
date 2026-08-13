@@ -10,6 +10,7 @@ let previewPanel: vscode.WebviewPanel | undefined;
 /** Page margins, in millimetres, of the A4 pages html2pdf produces. */
 const pageMarginSideMm = 5;
 const pageMarginBlockMm = 10;
+const pageWidthMm = 210;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Pretty Markdown (web) extension is now active!');
@@ -174,6 +175,8 @@ function getNonce(): string {
 }
 
 function getWebviewContent(content: string, title: string, html2pdfUri: vscode.Uri, nonce: string, cspSource: string, mermaidUri?: vscode.Uri, theme?: ThemeTokens, policy: OversizedBlockPolicy = 'fit'): string {
+    const palette = theme || resolveTheme();
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -183,7 +186,7 @@ function getWebviewContent(content: string, title: string, html2pdfUri: vscode.U
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource} 'nonce-${nonce}';">
     <style>
         :root {
-${getThemeCssVariables(theme || resolveTheme())}
+${getThemeCssVariables(palette)}
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -321,14 +324,23 @@ ${getThemeCssVariables(theme || resolveTheme())}
                 return;
             }
 
+            // html2canvas rasterises the on-screen layout and html2pdf then
+            // drops that image onto the page. A margin on the page leaves bare
+            // paper around it, which frames a themed document in white, so the
+            // margins are moved into the layout instead.
+            const rasterWidth = element.getBoundingClientRect().width;
+            element.style.padding =
+                (rasterWidth * ${pageMarginBlockMm} / ${pageWidthMm}) + 'px ' +
+                (rasterWidth * ${pageMarginSideMm} / ${pageWidthMm}) + 'px';
+
             // Blocks taller than a page would each cost a page-sized gap.
-            ${getPrintFitScript({ marginSideMm: pageMarginSideMm, marginBlockMm: pageMarginBlockMm, rootSelector: '#content', policy })}
+            ${getPrintFitScript({ marginSideMm: 0, marginBlockMm: 0, rootSelector: '#content', policy })}
 
             html2pdf().set({
                 filename,
-                margin: [${pageMarginBlockMm}, ${pageMarginSideMm}, ${pageMarginBlockMm}, ${pageMarginSideMm}],
+                margin: [0, 0, 0, 0],
                 image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2 },
+                html2canvas: { scale: 2, backgroundColor: ${JSON.stringify(palette.background)} },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             }).from(element).save();
         });

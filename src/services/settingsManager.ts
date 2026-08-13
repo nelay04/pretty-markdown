@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { resolveTheme, getThemeTokens, themeTokenNames, isValidColor, ThemeName, ThemeTokens } from './themeManager';
+import { resolveTheme, getThemeTokens, themeTokenNames, themeLabels, isValidColor, ThemeName, ThemeTokens } from './themeManager';
 
 /** Labels for the palette editor, in the order they are shown. */
 const tokenLabels: { [token: string]: string } = {
@@ -152,7 +152,7 @@ function getPaletteSectionHtml(): string {
     const presetValues = getThemeTokens(themeName);
 
     const themeOptions = (['default', 'github', 'dark', 'sepia'] as ThemeName[])
-        .map(name => `<option value="${name}" ${name === themeName ? 'selected' : ''}>${name}</option>`)
+        .map(name => `<option value="${name}" ${name === themeName ? 'selected' : ''}>${themeLabels[name]}</option>`)
         .join('');
 
     const swatches = themeTokenNames.map(token => {
