@@ -439,9 +439,16 @@
   },
   "dependencies": {
     "@puppeteer/browsers": "^2.13.2",
+    "@vscode/markdown-it-katex": "^1.1.2",
     "highlight.js": "^11.7.0",
     "html2pdf.js": "^0.14.0",
+    "katex": "^0.16.47",
     "markdown-it": "^14.1.0",
+    "markdown-it-footnote": "^4.0.0",
+    "markdown-it-mark": "^4.0.0",
+    "markdown-it-sub": "^2.0.0",
+    "markdown-it-sup": "^2.0.0",
+    "markdown-it-task-lists": "^2.1.1",
     "mermaid": "^11.16.1",
     "puppeteer-core": "^21.11.0"
   },
