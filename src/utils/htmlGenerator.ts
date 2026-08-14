@@ -216,6 +216,144 @@ ${getThemeCssVariables(theme)}
             text-align: left;
         }
         
+        /* Highlighted text */
+        mark {
+            background: var(--pm-mark-background);
+            color: var(--pm-mark-text);
+            padding: 0 2px;
+            border-radius: 2px;
+        }
+
+        sub, sup {
+            font-size: 0.75em;
+            line-height: 0;
+        }
+
+        /* Keyboard keys */
+        kbd {
+            background: var(--pm-inline-code-background);
+            color: var(--pm-text);
+            border: 1px solid var(--pm-code-border);
+            border-bottom-width: 2px;
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.8em;
+            white-space: nowrap;
+        }
+
+        /* Definition lists */
+        dl {
+            margin: 12px 0;
+        }
+
+        dt {
+            font-weight: 600;
+            color: var(--pm-heading);
+            margin-top: 8px;
+        }
+
+        dd {
+            margin: 2px 0 0 20px;
+            color: var(--pm-blockquote-text);
+        }
+
+        /* Collapsible sections */
+        details {
+            border: 1px solid var(--pm-code-border);
+            border-radius: 3px;
+            padding: 8px 12px;
+            margin: 12px 0;
+            background: var(--pm-blockquote-background);
+        }
+
+        summary {
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--pm-heading);
+        }
+
+        details[open] > summary {
+            margin-bottom: 8px;
+            border-bottom: 1px solid var(--pm-code-border);
+            padding-bottom: 6px;
+        }
+
+        /* Task lists */
+        ul.contains-task-list {
+            list-style: none;
+            padding-left: 2px;
+        }
+
+        li.task-list-item > label {
+            display: inline;
+        }
+
+        .task-list-item-checkbox {
+            margin-right: 6px;
+            accent-color: var(--pm-link);
+            vertical-align: -1px;
+        }
+
+        /* GitHub-flavoured alerts */
+        blockquote.pm-alert {
+            font-style: normal;
+            border-left-width: 4px;
+            border-left-color: var(--pm-alert-accent);
+        }
+
+        .pm-alert-title {
+            margin: 0 0 4px;
+            font-weight: 600;
+            color: var(--pm-alert-accent);
+        }
+
+        .pm-alert-note { --pm-alert-accent: var(--pm-alert-note); }
+        .pm-alert-tip { --pm-alert-accent: var(--pm-alert-tip); }
+        .pm-alert-important { --pm-alert-accent: var(--pm-alert-important); }
+        .pm-alert-warning { --pm-alert-accent: var(--pm-alert-warning); }
+        .pm-alert-caution { --pm-alert-accent: var(--pm-alert-caution); }
+
+        /* Footnotes */
+        .footnote-ref a {
+            border-bottom: none;
+            font-size: 0.85em;
+        }
+
+        .footnotes-sep {
+            margin-top: 24px;
+        }
+
+        .footnotes {
+            font-size: 0.9em;
+            color: var(--pm-blockquote-text);
+        }
+
+        .footnotes-list {
+            padding-left: 18px;
+        }
+
+        .footnote-item p {
+            margin: 2px 0;
+        }
+
+        .footnote-backref {
+            border-bottom: none;
+            text-decoration: none;
+        }
+
+        /* Maths. katex.min.css carries the rest; these two are ours. */
+        .katex {
+            color: var(--pm-text);
+        }
+
+        .katex-display {
+            margin: 12px 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 2px 0;
+        }
+
         /* Horizontal rule */
         hr {
             border: none;
@@ -249,6 +387,10 @@ ${getThemeCssVariables(theme)}
             pre {
                 page-break-inside: avoid;
                 font-size: 9pt;
+            }
+
+            details, blockquote.pm-alert, .katex-display {
+                page-break-inside: avoid;
             }
         }
     </style>

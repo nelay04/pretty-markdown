@@ -200,6 +200,21 @@ npm test   # runs pretest (compile + lint), then vscode-test
 - `diff` / `serialize-javascript` patch advisories inside mocha, which pins older majors.
 - `tar-fs` / `ws` patch the tree under `puppeteer-core`, which is deliberately held at **21.11.0**.
 
+### Why the markdown-it plugins are there
+
+Every runtime dependency ships to every user, so each one is here for a feature that would otherwise be hand-written:
+
+| Package | Feature |
+|---|---|
+| `@vscode/markdown-it-katex` + `katex` | `$...$` and `$$...$$` maths, typeset at render time |
+| `markdown-it-footnote` | `[^1]` references and the list at the foot of the page |
+| `markdown-it-task-lists` | `- [x]` checkboxes |
+| `markdown-it-mark`, `-sub`, `-sup` | `==highlight==`, `H~2~O`, `x^2^` |
+
+Front matter, GitHub alerts and heading anchors are **not** plugins — they are ~40 lines each in [`markdownRenderer.ts`](../../src/services/markdownRenderer.ts), because each needed markup or slug rules of its own.
+
+`katex` is pinned to the **0.16** line so a single copy is shared with `@vscode/markdown-it-katex`, which depends on `^0.16.4`. Installing the 0.18 line silently gives you two copies and a stylesheet that does not match the renderer. The build step copies `katex.min.css` and the woff2 fonts into `media/vendor/katex/`; the ttf and woff copies are skipped deliberately, as they triple the size for browsers that will never ask for them.
+
 ### Why puppeteer-core is pinned to 21.x
 
 Do not bump `puppeteer-core` to 22+ casually. From v22 the launcher switched from `--headless` to `--headless=new` and added `--enable-features=PdfOopif`. On v24 the Chrome renderer segfaults mid-export under WSL2 — verified 0/3 successful exports on v24 versus 3/3 on 21.11.0, same Chrome build, same launch args. v24 additionally drops `'networkidle0'` from the accepted `setContent` values (it remains valid for `goto`), so [`pdfExporter.ts`](../../src/services/pdfExporter.ts) would need editing too.

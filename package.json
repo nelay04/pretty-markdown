@@ -2,7 +2,7 @@
   "name": "pretty-markdown",
   "displayName": "Pretty Markdown",
   "description": "Beautiful Markdown preview and PDF export with syntax highlighting",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "publisher": "mistx",
   "author": {
     "name": "Snowy",
@@ -343,6 +343,34 @@
               "type": "string",
               "description": "Mermaid diagram background. Any CSS colour, e.g. #1a1a1a."
             },
+            "markBackground": {
+              "type": "string",
+              "description": "Background behind ==highlighted== text. Any CSS colour, e.g. #1a1a1a."
+            },
+            "markText": {
+              "type": "string",
+              "description": "Text colour of ==highlighted== text. Any CSS colour, e.g. #1a1a1a."
+            },
+            "alertNote": {
+              "type": "string",
+              "description": "Accent for a > [!NOTE] alert. Any CSS colour, e.g. #1a1a1a."
+            },
+            "alertTip": {
+              "type": "string",
+              "description": "Accent for a > [!TIP] alert. Any CSS colour, e.g. #1a1a1a."
+            },
+            "alertImportant": {
+              "type": "string",
+              "description": "Accent for a > [!IMPORTANT] alert. Any CSS colour, e.g. #1a1a1a."
+            },
+            "alertWarning": {
+              "type": "string",
+              "description": "Accent for a > [!WARNING] alert. Any CSS colour, e.g. #1a1a1a."
+            },
+            "alertCaution": {
+              "type": "string",
+              "description": "Accent for a > [!CAUTION] alert. Any CSS colour, e.g. #1a1a1a."
+            },
             "syntaxKeyword": {
               "type": "string",
               "description": "Syntax: keywords. Any CSS colour, e.g. #1a1a1a."
@@ -439,9 +467,16 @@
   },
   "dependencies": {
     "@puppeteer/browsers": "^2.13.2",
+    "@vscode/markdown-it-katex": "^1.1.2",
     "highlight.js": "^11.7.0",
     "html2pdf.js": "^0.14.0",
+    "katex": "^0.16.47",
     "markdown-it": "^14.1.0",
+    "markdown-it-footnote": "^4.0.0",
+    "markdown-it-mark": "^4.0.0",
+    "markdown-it-sub": "^2.0.0",
+    "markdown-it-sup": "^2.0.0",
+    "markdown-it-task-lists": "^2.1.1",
     "mermaid": "^11.16.1",
     "puppeteer-core": "^21.11.0"
   },

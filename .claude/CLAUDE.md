@@ -42,7 +42,7 @@ Run `npm run check-types && npm run lint` before calling any change done. A gree
 ## Do
 
 - Keep `extension.ts` to registration and wiring; put logic in `services/`.
-- Mirror preview markup, styling and Markdown changes into `extension.web.ts` — it carries its own renderer and template on purpose.
+- Mirror preview markup and styling into `extension.web.ts` — it carries its own HTML template. Markdown syntax is shared: `markdownRenderer.ts` serves every target, so keep it free of `node:fs` and `path`.
 - Add colours as `ThemeTokens` entries with a value in all four presets, a `package.json` schema entry, and a `var(--pm-*)` reference. Never hardcode one.
 - Give every injected webview script the page nonce and a matching CSP directive.
 - Treat a candidate that fails (a browser that will not launch, a diagram that will not parse) as a fallback, not a fatal error. One bad block must never cost the whole document.

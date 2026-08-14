@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 
 /**
  * Get the display label for a markdown file in the tree view
@@ -9,7 +8,9 @@ export function getMarkdownLabel(uri: vscode.Uri): string {
     if (workspaceFolder) {
         return vscode.workspace.asRelativePath(uri, false);
     }
-    return path.basename(uri.fsPath);
+    // Not path.basename: this module is reached by the web bundle, which
+    // cannot resolve node:path. A URI path is always '/'-separated.
+    return uri.path.split('/').pop() || uri.path;
 }
 
 /**

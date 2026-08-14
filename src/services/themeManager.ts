@@ -26,6 +26,13 @@ export interface ThemeTokens {
     tableBorder: string;
     horizontalRule: string;
     diagramBackground: string;
+    markBackground: string;
+    markText: string;
+    alertNote: string;
+    alertTip: string;
+    alertImportant: string;
+    alertWarning: string;
+    alertCaution: string;
     syntaxKeyword: string;
     syntaxString: string;
     syntaxComment: string;
@@ -74,6 +81,13 @@ const defaultTheme: ThemeTokens = {
     tableBorder: '#cccccc',
     horizontalRule: '#cccccc',
     diagramBackground: '#ffffff',
+    markBackground: '#fff3b0',
+    markText: '#1a1a1a',
+    alertNote: '#0969da',
+    alertTip: '#1a7f37',
+    alertImportant: '#8250df',
+    alertWarning: '#9a6700',
+    alertCaution: '#cf222e',
     syntaxKeyword: '#f19130',
     syntaxString: '#569cd6',
     syntaxComment: '#555555',
@@ -140,6 +154,13 @@ const darkTheme: ThemeTokens = {
     tableBorder: '#3c3c3c',
     horizontalRule: '#3c3c3c',
     diagramBackground: '#1e1e1e',
+    markBackground: '#5c4a00',
+    markText: '#f5e9c0',
+    alertNote: '#4493f8',
+    alertTip: '#3fb950',
+    alertImportant: '#ab7df8',
+    alertWarning: '#d29922',
+    alertCaution: '#f85149',
     syntaxKeyword: '#569cd6',
     syntaxString: '#ce9178',
     syntaxComment: '#6a9955',
@@ -174,7 +195,14 @@ const sepiaTheme: ThemeTokens = {
     tableRowAlternate: '#f6eeda',
     tableBorder: '#ddd0b8',
     horizontalRule: '#ddd0b8',
-    diagramBackground: '#faf4e8'
+    diagramBackground: '#faf4e8',
+    markBackground: '#f0e2a8',
+    markText: '#3b3128',
+    alertNote: '#2f6f9f',
+    alertTip: '#4a7b3a',
+    alertImportant: '#7a5aa0',
+    alertWarning: '#9a6b1f',
+    alertCaution: '#a33a2a'
 };
 
 const themes: { [name in ThemeName]: ThemeTokens } = {

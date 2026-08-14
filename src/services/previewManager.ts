@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { renderMarkdown, containsMermaid } from './markdownRenderer';
+import { renderMarkdown, containsMermaid, containsMath } from './markdownRenderer';
 import { getWebviewContent } from '../utils/htmlGenerator';
 import { getMermaidBootScript } from '../utils/mermaid';
 import { resolveTheme, getMermaidThemeVariables } from './themeManager';
+import { getKatexStylesheetTag } from './katexAssets';
 
 let previewPanel: vscode.WebviewPanel | undefined;
 let previewDocumentUri: vscode.Uri | undefined;
@@ -163,9 +164,15 @@ export function updatePreview(document: vscode.TextDocument, context: vscode.Ext
         vscode.Uri.joinPath(context.extensionUri, 'media', 'vendor', 'mermaid.min.js')
     );
 
-    const head = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; ` +
+    const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; ` +
         `img-src ${webview.cspSource} data: https: http:; style-src 'unsafe-inline' ${webview.cspSource}; ` +
         `font-src ${webview.cspSource} data:; script-src 'nonce-${nonce}';">`;
+
+    // katex's stylesheet and fonts are only worth loading for a document that
+    // has equations in it.
+    const head = containsMath(html)
+        ? `${csp}\n    ${getKatexStylesheetTag(webview, context.extensionUri)}`
+        : csp;
 
     const scripts = `${needsMermaid ? `    <script nonce="${nonce}" src="${mermaidUri}"></script>\n` : ''}    <script nonce="${nonce}">
 ${needsMermaid ? getMermaidBootScript({ variables: getMermaidThemeVariables(theme) }) : ''}

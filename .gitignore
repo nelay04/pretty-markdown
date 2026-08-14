@@ -5,3 +5,4 @@ node_modules
 *.vsix
 *cwd
 vsixmedia/vendor/
+docs/devdocs/resources/*.pdf

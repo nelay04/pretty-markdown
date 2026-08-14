@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
-import MarkdownIt from 'markdown-it';
-import hljs from 'highlight.js';
+import { renderMarkdown, containsMath } from './services/markdownRenderer';
 import { getMermaidBootScript } from './utils/mermaid';
-import { getPrintFitScript, policyOf, OversizedBlockPolicy, OversizedBlockSetting } from './utils/printLayout';
+import { getPrintExpandScript, getPrintFitScript, policyOf, OversizedBlockPolicy, OversizedBlockSetting } from './utils/printLayout';
 import { resolveTheme, getThemeCssVariables, getMermaidThemeVariables, ThemeTokens } from './services/themeManager';
 
 let previewPanel: vscode.WebviewPanel | undefined;
@@ -10,7 +9,6 @@ let previewPanel: vscode.WebviewPanel | undefined;
 /** Page margins, in millimetres, of the A4 pages html2pdf produces. */
 const pageMarginSideMm = 5;
 const pageMarginBlockMm = 10;
-const pageWidthMm = 210;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Pretty Markdown (web) extension is now active!');
@@ -101,6 +99,11 @@ function updatePreview(document: vscode.TextDocument, context: vscode.ExtensionC
     const mermaidUri = html.includes('<pre class="mermaid">')
         ? getMermaidScriptUri(previewPanel.webview, context)
         : undefined;
+    // katex's stylesheet and fonts are only worth loading for a document that
+    // has equations in it.
+    const katexUri = containsMath(html)
+        ? getKatexStylesheetUri(previewPanel.webview, context)
+        : undefined;
     const nonce = getNonce();
     const theme = resolveTheme(document.uri);
     // The web build cannot ask mid-export, so it follows the setting as given.
@@ -108,7 +111,7 @@ function updatePreview(document: vscode.TextDocument, context: vscode.ExtensionC
         .getConfiguration('prettyMarkdown', document.uri)
         .get<OversizedBlockSetting>('oversizedDiagrams', 'ask'));
     previewPanel.webview.html = getWebviewContent(
-        html, title, scriptUri, nonce, previewPanel.webview.cspSource, mermaidUri, theme, policy
+        html, title, scriptUri, nonce, previewPanel.webview.cspSource, mermaidUri, theme, policy, katexUri
     );
 }
 
@@ -116,41 +119,6 @@ function getDocumentTitle(document: vscode.TextDocument): string {
     const path = document.uri.path || '';
     const name = path.split('/').pop();
     return name && name.trim().length > 0 ? name : 'Preview';
-}
-
-function escapeHtml(text: string): string {
-    const map: { [key: string]: string } = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-    };
-    return text.replace(/[&<>"']/g, (m) => map[m]);
-}
-
-function renderMarkdown(markdown: string): string {
-    const md = new MarkdownIt({
-        html: true,
-        linkify: true,
-        typographer: true,
-        highlight: (str: string, lang: string) => {
-            if (lang && (lang.toLowerCase() === 'mermaid' || lang.toLowerCase() === 'mmd')) {
-                return `<pre class="mermaid">${escapeHtml(str)}</pre>`;
-            }
-
-            if (lang && hljs.getLanguage(lang)) {
-                try {
-                    return `<pre class="hljs"><code>${hljs.highlight(str, { language: lang }).value}</code></pre>`;
-                } catch (e) {
-                    console.error(e);
-                }
-            }
-            return `<pre class="hljs"><code>${escapeHtml(str)}</code></pre>`;
-        }
-    });
-
-    return md.render(markdown);
 }
 
 function getHtml2PdfScriptUri(webview: vscode.Webview, context: vscode.ExtensionContext): vscode.Uri {
@@ -165,6 +133,12 @@ function getMermaidScriptUri(webview: vscode.Webview, context: vscode.ExtensionC
     );
 }
 
+function getKatexStylesheetUri(webview: vscode.Webview, context: vscode.ExtensionContext): vscode.Uri {
+    return webview.asWebviewUri(
+        vscode.Uri.joinPath(context.extensionUri, 'media', 'vendor', 'katex', 'katex.min.css')
+    );
+}
+
 function getNonce(): string {
     let text = '';
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -174,7 +148,7 @@ function getNonce(): string {
     return text;
 }
 
-function getWebviewContent(content: string, title: string, html2pdfUri: vscode.Uri, nonce: string, cspSource: string, mermaidUri?: vscode.Uri, theme?: ThemeTokens, policy: OversizedBlockPolicy = 'fit'): string {
+function getWebviewContent(content: string, title: string, html2pdfUri: vscode.Uri, nonce: string, cspSource: string, mermaidUri?: vscode.Uri, theme?: ThemeTokens, policy: OversizedBlockPolicy = 'fit', katexUri?: vscode.Uri): string {
     const palette = theme || resolveTheme();
 
     return `<!DOCTYPE html>
@@ -183,7 +157,8 @@ function getWebviewContent(content: string, title: string, html2pdfUri: vscode.U
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title}</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource} 'nonce-${nonce}';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource} data:; script-src ${cspSource} 'nonce-${nonce}';">
+    ${katexUri ? `<link rel="stylesheet" href="${katexUri}">` : ''}
     <style>
         :root {
 ${getThemeCssVariables(palette)}
@@ -293,6 +268,57 @@ ${getThemeCssVariables(palette)}
         pre.mermaid { background: var(--pm-diagram-background); border: none; padding: 8px 0; margin: 12px 0; text-align: center; overflow-x: auto; page-break-inside: avoid; }
         pre.mermaid svg { max-width: 100%; height: auto; }
         pre.mermaid:not([data-processed]) { color: var(--pm-blockquote-text); font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85em; text-align: left; }
+        mark { background: var(--pm-mark-background); color: var(--pm-mark-text); padding: 0 2px; border-radius: 2px; }
+        sub, sup { font-size: 0.75em; line-height: 0; }
+        kbd {
+            background: var(--pm-inline-code-background);
+            color: var(--pm-text);
+            border: 1px solid var(--pm-code-border);
+            border-bottom-width: 2px;
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.8em;
+            white-space: nowrap;
+        }
+        dl { margin: 12px 0; }
+        dt { font-weight: 600; color: var(--pm-heading); margin-top: 8px; }
+        dd { margin: 2px 0 0 20px; color: var(--pm-blockquote-text); }
+        details {
+            border: 1px solid var(--pm-code-border);
+            border-radius: 3px;
+            padding: 8px 12px;
+            margin: 12px 0;
+            background: var(--pm-blockquote-background);
+        }
+        summary { cursor: pointer; font-weight: 500; color: var(--pm-heading); }
+        details[open] > summary {
+            margin-bottom: 8px;
+            border-bottom: 1px solid var(--pm-code-border);
+            padding-bottom: 6px;
+        }
+        ul.contains-task-list { list-style: none; padding-left: 2px; }
+        li.task-list-item > label { display: inline; }
+        .task-list-item-checkbox { margin-right: 6px; accent-color: var(--pm-link); vertical-align: -1px; }
+        blockquote.pm-alert {
+            font-style: normal;
+            border-left-width: 4px;
+            border-left-color: var(--pm-alert-accent);
+        }
+        .pm-alert-title { margin: 0 0 4px; font-weight: 600; color: var(--pm-alert-accent); }
+        .pm-alert-note { --pm-alert-accent: var(--pm-alert-note); }
+        .pm-alert-tip { --pm-alert-accent: var(--pm-alert-tip); }
+        .pm-alert-important { --pm-alert-accent: var(--pm-alert-important); }
+        .pm-alert-warning { --pm-alert-accent: var(--pm-alert-warning); }
+        .pm-alert-caution { --pm-alert-accent: var(--pm-alert-caution); }
+        .footnote-ref a { border-bottom: none; font-size: 0.85em; }
+        .footnotes-sep { margin-top: 24px; }
+        .footnotes { font-size: 0.9em; color: var(--pm-blockquote-text); }
+        .footnotes-list { padding-left: 18px; }
+        .footnote-item p { margin: 2px 0; }
+        .footnote-backref { border-bottom: none; text-decoration: none; }
+        .katex { color: var(--pm-text); }
+        .katex-display { margin: 12px 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
         hr { border: none; border-top: 1px solid var(--pm-horizontal-rule); margin: 16px 0; }
         h1 + p, h2 + p, h3 + p, h4 + p, h5 + p, h6 + p { margin-top: 4px; }
         @media print {
@@ -300,6 +326,7 @@ ${getThemeCssVariables(palette)}
             h1, h2, h3, h4, h5, h6 { margin: 12pt 0 6pt; page-break-after: avoid; }
             p, li { margin: 4pt 0; }
             pre { page-break-inside: avoid; font-size: 9pt; }
+            details, blockquote.pm-alert, .katex-display { page-break-inside: avoid; }
         }
     </style>
 </head>
@@ -324,21 +351,18 @@ ${getThemeCssVariables(palette)}
                 return;
             }
 
-            // html2canvas rasterises the on-screen layout and html2pdf then
-            // drops that image onto the page. A margin on the page leaves bare
-            // paper around it, which frames a themed document in white, so the
-            // margins are moved into the layout instead.
-            const rasterWidth = element.getBoundingClientRect().width;
-            element.style.padding =
-                (rasterWidth * ${pageMarginBlockMm} / ${pageWidthMm}) + 'px ' +
-                (rasterWidth * ${pageMarginSideMm} / ${pageWidthMm}) + 'px';
+            // A section left collapsed would print as its summary alone.
+            ${getPrintExpandScript()}
 
             // Blocks taller than a page would each cost a page-sized gap.
-            ${getPrintFitScript({ marginSideMm: 0, marginBlockMm: 0, rootSelector: '#content', policy })}
+            ${getPrintFitScript({ marginSideMm: pageMarginSideMm, marginBlockMm: pageMarginBlockMm, rootSelector: '#content', policy })}
 
             html2pdf().set({
                 filename,
-                margin: [0, 0, 0, 0],
+                // Real page margins: this converter paginates by slicing one
+                // tall image, and margins moved into the layout put the slice
+                // boundaries out of step with the page height.
+                margin: [${pageMarginBlockMm}, ${pageMarginSideMm}, ${pageMarginBlockMm}, ${pageMarginSideMm}],
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, backgroundColor: ${JSON.stringify(palette.background)} },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
