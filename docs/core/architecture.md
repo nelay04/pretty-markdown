@@ -15,7 +15,9 @@ Both are bundled by `esbuild.js` in a single pass, with `vscode` marked external
 
 `extension.ts` is registration only: it creates the tree view, the status bar items, and every command, then delegates the work to a service. Keep it that way — logic added there is unreachable from the web build and untestable in isolation.
 
-`extension.web.ts` is standalone by necessity. It shares [`themeManager`](../../src/services/themeManager.ts), [`utils/mermaid`](../../src/utils/mermaid.ts) and [`utils/printLayout`](../../src/utils/printLayout.ts), but carries **its own copy** of the markdown-it setup and the HTML template, because it cannot pull in anything that touches `node:fs`, `path`, or puppeteer. This duplication is deliberate and it is the project's sharpest edge: **a change to preview markup or styling is only half done until it is mirrored in `extension.web.ts`.**
+`extension.web.ts` cannot pull in anything that touches `node:fs`, `path`, or puppeteer, and that — not a preference for duplication — is what decides where the split falls. It shares [`markdownRenderer`](../../src/services/markdownRenderer.ts), [`themeManager`](../../src/services/themeManager.ts), [`utils/mermaid`](../../src/utils/mermaid.ts) and [`utils/printLayout`](../../src/utils/printLayout.ts), all of which stay free of node built-ins on purpose. It carries **its own copy of the HTML template**, because the desktop template is built around a webview the web build does not have.
+
+That template is the project's sharpest edge: **a change to preview markup or styling is only half done until it is mirrored in `extension.web.ts`.** Markdown syntax is not — one renderer serves both, so a plugin added there reaches every target at once.
 
 ---
 
@@ -28,10 +30,12 @@ src/
   providers/
     treeViewProvider.ts   TreeDataProvider — files, filter, per-file action groups
   services/
-    markdownRenderer.ts   markdown-it + highlight.js -> HTML; mermaid fences; resolveImage hook
+    markdownRenderer.ts   markdown-it + plugins + highlight.js -> HTML; shared with the web build
     previewManager.ts     the preview webview: panel lifecycle, CSP, link routing
     pdfExporter.ts        Chrome/puppeteer-core export — browser discovery, print layout
     webviewPdfExporter.ts browserless fallback export via html2pdf.js in a webview
+    chromeLibraries.ts    Linux: which libraries Chrome lacks, and installing them
+    katexAssets.ts        katex stylesheet: linked for webviews, inlined for Chrome
     themeManager.ts       theme presets + prettyMarkdown.colors overrides -> ThemeTokens
     settingsManager.ts    the settings webview (palette pickers, confirmation toggle)
     actionScanner.ts      finds runnable commands in a Markdown file
@@ -59,13 +63,17 @@ Markdown text
    -> target
 ```
 
-| Target | Images resolve to | Mermaid loaded from | Finished when |
-|---|---|---|---|
-| Preview webview | `webview.asWebviewUri` | `asWebviewUri` | never — it renders live |
-| Chrome export | `data:` URIs | `page.addScriptTag` | `waitForFunction` on the ready flag |
-| Browserless export | `data:` URIs | `asWebviewUri` | ready flag polled before rasterising |
+| Target | Images resolve to | Mermaid loaded from | katex CSS from | Finished when |
+|---|---|---|---|---|
+| Preview webview | `webview.asWebviewUri` | `asWebviewUri` | `asWebviewUri` | never — it renders live |
+| Chrome export | `data:` URIs | `page.addScriptTag` | inlined, fonts as `data:` | `waitForFunction` on the ready flag |
+| Browserless export | `data:` URIs | `asWebviewUri` | inlined, fonts as `data:` | ready flag polled before rasterising |
 
 `renderMarkdown` takes a `resolveImage` hook rather than choosing a scheme itself, because Chrome refuses `file://` subresources in a page built with `setContent`, and the fallback webview may only read from the extension's own folder.
+
+**Maths** is typeset at render time by [`@vscode/markdown-it-katex`](../../src/services/markdownRenderer.ts), so no script runs in the page and nothing has to be waited for. What does have to reach the page is katex's stylesheet and its fonts, and the same `setContent` restriction applies: [`katexAssets`](../../src/services/katexAssets.ts) links the vendored file for a webview and inlines it, fonts and all, for Chrome. Around 360 KB either way, so `containsMath()` decides whether it is worth sending at all.
+
+**Everything the printer needs but the screen does not** is a script, not a stylesheet: `getPrintExpandScript()` opens collapsed `<details>` sections, then `getPrintFitScript()` measures. Both run in all three export paths, in that order.
 
 **Colours** flow one way: settings -> `resolveTheme()` -> `ThemeTokens` -> CSS custom properties in `htmlGenerator`, plus mermaid theme variables. Never hardcode a colour in a template; add a token to `ThemeTokens`, give every preset a value, expose it in `package.json` under `prettyMarkdown.colors`, and read it as `var(--pm-*)`.
 
@@ -78,6 +86,10 @@ Markdown text
 Two engines, chosen at runtime. [`pdfExporter.ts`](../../src/services/pdfExporter.ts) drives Chrome through `puppeteer-core` (which ships no browser) and produces a real vector PDF with selectable text. It tries, in order: `PUPPETEER_EXECUTABLE_PATH`, the shared `~/.cache/puppeteer`, the legacy per-profile cache, a system Chrome, and only then an opt-in download — and a candidate that exists but fails to launch is skipped, not fatal.
 
 When no Chrome can run, [`webviewPdfExporter.ts`](../../src/services/webviewPdfExporter.ts) converts the page with html2pdf.js inside a webview. The result is rasterised: no selectable text, roughly 3× the size. It is a fallback, never a default, and the user is always told why they got it.
+
+On Linux a Chrome that exists can still refuse to start, because it links against system libraries a minimal image may not carry (`libnss3`, `libnspr4`, `libasound2`). [`chromeLibraries.ts`](../../src/services/chromeLibraries.ts) checks the linker rather than inferring from a launch failure — with no Chrome installed there is no failure to learn from, and a 185 MB download cannot supply a missing library. It offers the install once per machine, then leaves the offer on the notification that follows the fallback export.
+
+Installing needs root. Where `sudo -n` already grants it the install runs unattended; otherwise the command goes into a terminal and the extension watches the linker until the libraries appear. Prompting for a password in a dialog and handing it to `sudo` is not something this extension does.
 
 `puppeteer-core` is pinned to **21.11.0** on purpose; see the reasoning in [local-development.md](local-development.md#9-dependency-hygiene) before touching it.
 
@@ -109,7 +121,7 @@ Actions execute shell commands from the open document, so the confirmation promp
 | New setting | `package.json` (`configuration`) + the service that reads it + the CHANGELOG |
 | New colour | `ThemeTokens` + all four presets + `package.json` + `htmlGenerator` CSS + `extension.web.ts` |
 | Preview styling | `htmlGenerator.ts` **and** `extension.web.ts` |
-| Markdown feature | `markdownRenderer.ts` **and** `extension.web.ts`'s local renderer |
+| Markdown feature | `markdownRenderer.ts` alone — every target renders through it — plus CSS for whatever it emits |
 | Export behaviour | `pdfExporter.ts` and, if it is layout, `printLayout.ts`; check the fallback still works |
 
 ---

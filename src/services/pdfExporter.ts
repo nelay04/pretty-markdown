@@ -15,11 +15,12 @@ import {
     computeSystemExecutablePath,
     getInstalledBrowsers,
 } from '@puppeteer/browsers';
-import { renderMarkdown, containsMermaid } from './markdownRenderer';
+import { renderMarkdown, containsMermaid, containsMath } from './markdownRenderer';
 import { getWebviewContent } from '../utils/htmlGenerator';
 import { exportPdfWithWebview } from './webviewPdfExporter';
 import { getMermaidBootScript, getMermaidCleanupScript, mermaidReadyFlag } from '../utils/mermaid';
 import {
+    getPrintExpandScript,
     getPrintFitScript,
     policyOf,
     OversizedBlockPolicy,
@@ -27,6 +28,14 @@ import {
     PrintFitResult
 } from '../utils/printLayout';
 import { resolveTheme, getMermaidThemeVariables, ThemeTokens } from './themeManager';
+import { getInlinedKatexStyles } from './katexAssets';
+import {
+    buildMissingLibrariesMessage,
+    clearLinkerCache,
+    findMissingLibraries,
+    findMissingSystemLibraries,
+    installChromeLibraries
+} from './chromeLibraries';
 
 /**
  * Shared download location, deliberately not inside globalStorageUri: that path
@@ -128,6 +137,9 @@ function removeBrokenInstall(cacheDir: string, buildId: string, platform: Browse
 
 const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
 
+/** Set once the install has been offered, so it is only offered up front once. */
+const librariesOfferedKey = 'prettyMarkdown.chromeLibrariesOffered';
+
 /** Diagrams should never hold the export open for long. */
 const mermaidRenderTimeoutMs = 20000;
 
@@ -202,161 +214,6 @@ async function askOversizedDiagramPolicy(gaps: PrintFitResult['gaps']): Promise<
     );
 
     return choice === 'Split across pages' ? 'split' : 'fit';
-}
-
-/**
- * Packages providing the libraries Chrome most often lacks. Only Linux needs
- * this: the Windows and macOS builds of Chrome are self-contained.
- */
-const libraryPackages: { [library: string]: { debian: string; fedora: string; arch: string } } = {
-    'libnspr4.so': { debian: 'libnspr4', fedora: 'nspr', arch: 'nspr' },
-    'libnss3.so': { debian: 'libnss3', fedora: 'nss', arch: 'nss' },
-    'libnssutil3.so': { debian: 'libnss3', fedora: 'nss', arch: 'nss' },
-    'libsmime3.so': { debian: 'libnss3', fedora: 'nss', arch: 'nss' },
-    'libasound.so.2': { debian: 'libasound2t64', fedora: 'alsa-lib', arch: 'alsa-lib' },
-    'libatk-1.0.so.0': { debian: 'libatk1.0-0', fedora: 'atk', arch: 'atk' },
-    'libatk-bridge-2.0.so.0': { debian: 'libatk-bridge2.0-0', fedora: 'at-spi2-atk', arch: 'at-spi2-core' },
-    'libcups.so.2': { debian: 'libcups2', fedora: 'cups-libs', arch: 'libcups' },
-    'libdrm.so.2': { debian: 'libdrm2', fedora: 'libdrm', arch: 'libdrm' },
-    'libgbm.so.1': { debian: 'libgbm1', fedora: 'mesa-libgbm', arch: 'mesa' },
-    'libgtk-3.so.0': { debian: 'libgtk-3-0', fedora: 'gtk3', arch: 'gtk3' },
-    'libpango-1.0.so.0': { debian: 'libpango-1.0-0', fedora: 'pango', arch: 'pango' },
-    'libxkbcommon.so.0': { debian: 'libxkbcommon0', fedora: 'libxkbcommon', arch: 'libxkbcommon' },
-    'libxcomposite.so.1': { debian: 'libxcomposite1', fedora: 'libXcomposite', arch: 'libxcomposite' },
-    'libxdamage.so.1': { debian: 'libxdamage1', fedora: 'libXdamage', arch: 'libxdamage' },
-    'libxfixes.so.3': { debian: 'libxfixes3', fedora: 'libXfixes', arch: 'libxfixes' },
-    'libxrandr.so.2': { debian: 'libxrandr2', fedora: 'libXrandr', arch: 'libxrandr' }
-};
-
-/** Libraries Chrome cannot start without, checked before offering a download. */
-const requiredLibraries = [
-    'libnspr4.so',
-    'libnss3.so',
-    'libnssutil3.so',
-    'libsmime3.so',
-    'libasound.so.2'
-];
-
-let cachedLinkerLibraries: Set<string> | undefined;
-
-/**
- * Every library name the dynamic linker knows about, read once per session.
- */
-function getLinkerLibraries(): Set<string> {
-    if (cachedLinkerLibraries) {
-        return cachedLinkerLibraries;
-    }
-
-    const names = new Set<string>();
-    for (const ldconfig of ['ldconfig', '/sbin/ldconfig', '/usr/sbin/ldconfig']) {
-        try {
-            const output = execFileSync(ldconfig, ['-p'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-            for (const match of output.matchAll(/^\s*(\S+\.so[^\s]*)/gm)) {
-                names.add(match[1]);
-            }
-            break;
-        } catch {
-            // Try the next location.
-        }
-    }
-
-    cachedLinkerLibraries = names;
-    return names;
-}
-
-/**
- * Libraries Chrome needs that this system does not have.
- *
- * Downloading a browser cannot fix a missing system library, so this is
- * checked before ever proposing the download.
- */
-function findMissingSystemLibraries(): string[] {
-    if (process.platform !== 'linux') {
-        return [];
-    }
-
-    const linkerLibraries = getLinkerLibraries();
-    if (linkerLibraries.size === 0) {
-        // No usable ldconfig; do not guess that libraries are missing.
-        return [];
-    }
-
-    const searchPaths = (process.env.LD_LIBRARY_PATH || '').split(path.delimiter).filter(Boolean);
-
-    return requiredLibraries.filter(library => {
-        if (linkerLibraries.has(library)) {
-            return false;
-        }
-        return !searchPaths.some(dir => fs.existsSync(path.join(dir, library)));
-    });
-}
-
-/**
- * Which package manager to suggest. Package names differ per distribution, so
- * suggesting `apt` on Fedora would just waste the user's time.
- */
-function detectDistroFamily(): { family: 'debian' | 'fedora' | 'arch'; installCommand: string } | undefined {
-    let osRelease = '';
-    try {
-        osRelease = fs.readFileSync('/etc/os-release', 'utf8').toLowerCase();
-    } catch {
-        return undefined;
-    }
-
-    if (/\b(debian|ubuntu|linuxmint|pop)\b/.test(osRelease)) {
-        return { family: 'debian', installCommand: 'sudo apt install -y' };
-    }
-    if (/\b(fedora|rhel|centos|rocky|almalinux)\b/.test(osRelease)) {
-        return { family: 'fedora', installCommand: 'sudo dnf install -y' };
-    }
-    if (/\b(arch|manjaro|endeavouros)\b/.test(osRelease)) {
-        return { family: 'arch', installCommand: 'sudo pacman -S --noconfirm' };
-    }
-
-    return undefined;
-}
-
-/**
- * Shared libraries Chrome reported as missing, if that is why it failed.
- *
- * Chrome only names the first one it hits, which would send the user through
- * one install per library, so ask `ldd` for the full list up front.
- */
-function findMissingLibraries(error: unknown, executablePath: string): string[] {
-    const message = error instanceof Error ? error.message : String(error);
-    const matches = [...message.matchAll(/error while loading shared libraries: ([^:]+):/g)];
-    if (matches.length === 0) {
-        return [];
-    }
-
-    const reported = matches.map(match => match[1]);
-
-    try {
-        const output = execFileSync('ldd', [executablePath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-        const missing = [...output.matchAll(/^\s*(\S+)\s*=>\s*not found/gm)].map(match => match[1]);
-        if (missing.length > 0) {
-            return [...new Set(missing)];
-        }
-    } catch {
-        // No ldd, or it failed; fall back to what Chrome told us.
-    }
-
-    return [...new Set(reported)];
-}
-
-function buildMissingLibrariesMessage(libraries: string[]): string {
-    const distro = detectDistroFamily();
-    const packages = distro
-        ? [...new Set(libraries.map(library => libraryPackages[library]?.[distro.family]).filter(Boolean))]
-        : [];
-
-    const installHint = packages.length > 0
-        ? `Install them with: ${distro?.installCommand} ${packages.join(' ')}`
-        : 'Install the system packages providing them for your distribution.';
-
-    return `Chrome cannot start because system libraries are missing (${libraries.join(', ')}). ` +
-        `${installHint} ` +
-        'Alternatively set PUPPETEER_EXECUTABLE_PATH to a working Chrome.';
 }
 
 /**
@@ -453,7 +310,7 @@ async function downloadChrome(
 async function launchChrome(
     context: vscode.ExtensionContext,
     progress: vscode.Progress<{ message?: string; increment?: number }>
-) {
+): Promise<PuppeteerBrowser> {
     const platform = detectBrowserPlatform();
     if (!platform) {
         throw new Error('Unsupported platform for Chrome download.');
@@ -483,7 +340,34 @@ async function launchChrome(
     }
 
     if (missingLibraries.size > 0) {
-        throw new Error(buildMissingLibrariesMessage([...missingLibraries]));
+        const libraries = [...missingLibraries];
+
+        // Offered once. After that the export goes straight to the fallback
+        // rather than opening a dialog on every attempt; the offer is made
+        // again from the notification that follows the export.
+        if (context.globalState.get<boolean>(librariesOfferedKey) !== true) {
+            await context.globalState.update(librariesOfferedKey, true);
+
+            const choice = await vscode.window.showInformationMessage(
+                'Chrome cannot start on this machine because some system libraries are missing.',
+                {
+                    modal: true,
+                    detail: `Pretty Markdown can install them for you (${libraries.join(', ')}). ` +
+                        'They are small, come from your distribution\'s own package manager, and are a one-time step ' +
+                        'that gives you PDFs with selectable, searchable text.\n\n' +
+                        'The built-in converter needs nothing installed, but its output is an image.'
+                },
+                'Install libraries',
+                'Use built-in converter'
+            );
+
+            if (choice === 'Install libraries' && await installChromeLibraries(libraries)) {
+                // Installed: this run can have the browser it came for.
+                return await launchChrome(context, progress);
+            }
+        }
+
+        throw new Error(buildMissingLibrariesMessage(libraries));
     }
 
     // The download is large and one-time; let the user opt for the built-in
@@ -647,18 +531,32 @@ async function exportWithoutBrowser(
     }
 
     progress.report({ increment: 30, message: 'Chrome unavailable, using built-in converter...' });
-    await exportPdfWithWebview(context, fullHtml, pdfPath, theme, policy);
+    await exportPdfWithWebview(context, fullHtml, pdfPath, theme, policy, stage => {
+        progress.report({ message: `Built-in converter: ${stage}` });
+    });
     progress.report({ increment: 40, message: 'Done!' });
 
     // Not awaited: the progress notification stays on screen until this task
     // settles, and waiting on a message the user may never click would pin it.
     const reason = launchError instanceof Error ? launchError.message : String(launchError);
+    const missingLibraries = findMissingSystemLibraries();
+    const actions = missingLibraries.length > 0 ? ['Install libraries', 'Why?'] : ['Why?'];
+
     void vscode.window.showWarningMessage(
-        `PDF exported to ${path.basename(pdfPath.fsPath)} without Chrome, so its text is not selectable.`,
-        'Why?'
-    ).then(selection => {
+        `PDF exported to ${path.basename(pdfPath.fsPath)} without Chrome, so its text is not selectable.` +
+        (missingLibraries.length > 0
+            ? ' Installing a few system libraries would give you real text, a smaller file and cleaner page breaks.'
+            : ''),
+        ...actions
+    ).then(async selection => {
         if (selection === 'Why?') {
-            vscode.window.showInformationMessage(reason);
+            void vscode.window.showInformationMessage(reason);
+            return;
+        }
+        if (selection === 'Install libraries' && await installChromeLibraries(missingLibraries)) {
+            void vscode.window.showInformationMessage(
+                'Chrome can now start. Export again for a PDF with selectable text.'
+            );
         }
     });
 }
@@ -680,7 +578,18 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
         }
     });
     const theme = resolveTheme(document.uri);
-    const fullHtml = getWebviewContent(html, path.basename(document.fileName), { theme });
+    const title = path.basename(document.fileName);
+    const needsMath = containsMath(html);
+
+    // Chrome refuses subresources in a setContent page, so the equation fonts
+    // have to travel inside the document itself. The fallback runs in a
+    // webview, which can load the vendored stylesheet instead: pushing 360 KB
+    // of inlined fonts through html2canvas only makes a slow path slower.
+    const fullHtml = getWebviewContent(html, title, {
+        theme,
+        head: needsMath ? getInlinedKatexStyles(context.extensionUri) : undefined
+    });
+    const fallbackHtml = needsMath ? getWebviewContent(html, title, { theme }) : fullHtml;
     const needsMermaid = containsMermaid(html);
 
     vscode.window.withProgress({
@@ -698,7 +607,7 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
                 // No usable Chrome on this machine; fall back to the bundled
                 // converter rather than failing the export outright.
                 await exportWithoutBrowser(
-                    document, context, fullHtml, progress, launchError, theme,
+                    document, context, fallbackHtml, progress, launchError, theme,
                     policyOf(getOversizedDiagramSetting(document.uri))
                 );
                 return;
@@ -720,6 +629,9 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
                     progress.report({ message: 'Rendering diagrams...' });
                     await renderMermaidDiagrams(page, context, theme);
                 }
+
+                // A section left collapsed would print as its summary alone.
+                await page.evaluate(getPrintExpandScript());
 
                 await matchPrintLayoutWidth(page);
 

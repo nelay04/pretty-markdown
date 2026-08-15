@@ -7,17 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- Export to HTML functionality
+- Table of contents generation
+- Setting for opening the preview in the current tab or a new one
+
+## [1.7.0] - 15-08-2026
+
+### Added
+- **Maths**: LaTeX written as `$E = mc^2$` or in a `$$ ... $$` block is typeset with KaTeX, in the preview and in exported PDFs alike. The fonts travel with the export, so an equation looks the same on a machine that has never seen the document.
+- **GitHub-flavoured alerts**: A blockquote starting with `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` is drawn as a titled callout, with an accent colour per kind that follows the theme and can be overridden through `prettyMarkdown.colors`.
+- **Task lists**: `- [x]` and `- [ ]` render as checkboxes instead of literal brackets.
+- **Footnotes**: `[^1]` references link to a numbered list at the foot of the document, with a link back to where you were reading.
+- **Section links**: Every heading is given a GitHub-style anchor, so a hand-written table of contents now navigates both the preview and the exported PDF.
+- **More inline syntax**: `==highlighted==` text, `H~2~O` subscripts and `x^2^` superscripts, plus styling for definition lists and `<kbd>` keys.
+- **Offer to install Chrome's missing libraries (Linux)**: On a Linux machine where Chrome cannot start for want of system libraries, the export now offers to install them rather than only naming them. Package names are resolved from the distribution's own package manager, so Ubuntu 22.04 and 24.04 or later each get the right ones. Decline it and the export falls back as before; the offer returns as a button on the notification that follows, next to the reason it is worth taking.
+
 ### Changed
+- **Front matter is no longer printed**: A YAML block at the top of a document was rendered as a rule and a wall of `title: ...` text. It is now treated as metadata and left out of the page.
+- **Collapsed sections are exported open**: A `<details>` section folded away in the preview used to export as its summary line alone, losing the content inside it. Exports now expand every section first.
 - **Themes have names**: The `default` and `dark` presets are now shown as **Pretty Light** and **Pretty Dark** in the settings page and in the VS Code settings editor. The values written to `settings.json` are unchanged, so existing configurations keep working.
 
 ### Fixed
 - **Diagrams match the rest of a dark page**: On the Pretty Dark theme, diagrams were drawn on a white canvas inside a dark document, and clusters, notes and sequence actors each picked up a slightly different grey. Every diagram surface now comes from the theme, so a diagram is one flat colour with the page around it.
 - **Exported PDFs are no longer framed in white**: A themed export left the page margins as bare white paper, which was clearly visible on Pretty Dark. The margins now carry the theme background, in both the Chrome and the built-in export.
-
-### Planned
-- Export to HTML functionality
-- Table of contents generation
-- Math equation rendering
 
 ## [1.6.0] - 12-08-2026
 

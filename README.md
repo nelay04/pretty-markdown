@@ -10,6 +10,9 @@ A beautiful and feature-rich Markdown preview and PDF export extension for Visua
 - **PDF Export**: One-click export to high-quality PDF files
 - **Themes and Colours**: Four built-in themes plus per-component colour overrides, applied to the preview and the PDF alike
 - **Mermaid Diagrams**: `mermaid` code blocks render as diagrams in the preview and in exported PDFs
+- **Maths**: `$inline$` and `$$block$$` LaTeX is typeset with KaTeX, in the preview and in exported PDFs
+- **Full GitHub Flavour**: task lists, `> [!NOTE]` alerts, footnotes, `==highlight==`, `~sub~` and `^super^`, definition lists and `<kbd>` keys
+- **Working Section Links**: every heading gets a GitHub-style anchor, so a hand-written table of contents navigates the preview and the PDF
 - **Local Images**: Images stored next to your Markdown file load in the preview and are embedded in the PDF
 - **Clickable Links**: Jump to other Markdown files and workspace files straight from the preview
 - **Web PDF Download**: Export PDF directly in vscode.dev

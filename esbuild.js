@@ -30,7 +30,35 @@ function vendorBrowserLibraries() {
 		fs.copyFileSync(source, path.join(targetDir, name));
 	}
 
+	vendorKatex(targetDir);
+
 	console.log('[build] vendored browser libraries into media/vendor');
+}
+
+/**
+ * katex renders to HTML that only reads correctly in katex's own fonts, so the
+ * stylesheet and the woff2 files travel together.
+ *
+ * Only woff2 is copied: every browser this extension runs in supports it, and
+ * the woff and ttf copies triple the size for nothing.
+ */
+function vendorKatex(targetDir) {
+	const source = path.join(__dirname, 'node_modules', 'katex', 'dist');
+	const katexDir = path.join(targetDir, 'katex');
+	const fontsDir = path.join(katexDir, 'fonts');
+
+	if (!fs.existsSync(source)) {
+		throw new Error('Cannot vendor katex: node_modules/katex/dist is missing. Run npm install first.');
+	}
+
+	fs.mkdirSync(fontsDir, { recursive: true });
+	fs.copyFileSync(path.join(source, 'katex.min.css'), path.join(katexDir, 'katex.min.css'));
+
+	for (const name of fs.readdirSync(path.join(source, 'fonts'))) {
+		if (name.endsWith('.woff2')) {
+			fs.copyFileSync(path.join(source, 'fonts', name), path.join(fontsDir, name));
+		}
+	}
 }
 
 /**

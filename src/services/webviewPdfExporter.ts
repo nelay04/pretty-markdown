@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getMermaidBootScript, getMermaidCleanupScript, mermaidReadyFlag } from '../utils/mermaid';
-import { getPrintFitScript, OversizedBlockPolicy } from '../utils/printLayout';
+import { getPrintExpandScript, getPrintFitScript, OversizedBlockPolicy } from '../utils/printLayout';
 import { ThemeTokens, getMermaidThemeVariables } from './themeManager';
 
 /**
@@ -18,7 +18,6 @@ const mermaidTimeoutMs = 20000;
 /** Page margins, in millimetres, of the A4 pages html2pdf produces. */
 const pageMarginSideMm = 5;
 const pageMarginBlockMm = 10;
-const pageWidthMm = 210;
 
 function getNonce(): string {
     let text = '';
@@ -40,7 +39,8 @@ export function buildConversionDocument(
     cspSource: string,
     mermaidUri?: vscode.Uri,
     theme?: ThemeTokens,
-    policy: OversizedBlockPolicy = 'fit'
+    policy: OversizedBlockPolicy = 'fit',
+    katexUri?: vscode.Uri
 ): string {
     const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; ` +
         `img-src ${cspSource} data: https: http:; style-src 'unsafe-inline' ${cspSource}; ` +
@@ -57,10 +57,15 @@ export function buildConversionDocument(
                 vscodeApi.postMessage({ type: 'pdf-error', reason: String(reason) });
             }
 
+            function stage(name) {
+                vscodeApi.postMessage({ type: 'pdf-stage', stage: name });
+            }
+
             window.addEventListener('error', (event) => fail(event.message));
 
             // Diagrams have to finish drawing before the page is rasterised.
             function whenDiagramsReady() {
+                ${mermaidUri ? 'stage(\'Drawing diagrams...\');' : ''}
                 ${mermaidUri ? getMermaidBootScript(theme ? { variables: getMermaidThemeVariables(theme) } : {}) : `window.${mermaidReadyFlag} = true;`}
 
                 return new Promise((resolve) => {
@@ -85,21 +90,23 @@ export function buildConversionDocument(
                 whenDiagramsReady().then(() => {
                 ${getMermaidCleanupScript()}
 
-                // html2canvas rasterises the on-screen layout and html2pdf
-                // then drops that image onto the page. A margin on the page
-                // leaves bare paper around it, which frames a themed document
-                // in white, so the margins are moved into the layout instead.
-                const rasterWidth = document.body.getBoundingClientRect().width;
-                document.body.style.padding =
-                    (rasterWidth * ${pageMarginBlockMm} / ${pageWidthMm}) + 'px ' +
-                    (rasterWidth * ${pageMarginSideMm} / ${pageWidthMm}) + 'px';
+                stage('Laying out pages...');
+
+                // A section left collapsed would print as its summary alone.
+                ${getPrintExpandScript()}
 
                 // Blocks taller than a page would each cost a page-sized gap.
-                ${getPrintFitScript({ marginSideMm: 0, marginBlockMm: 0, policy })}
+                ${getPrintFitScript({ marginSideMm: pageMarginSideMm, marginBlockMm: pageMarginBlockMm, policy })}
+
+                stage('Rasterising the document...');
 
                 html2pdf().set({
                     // html2pdf takes margins as [top, left, bottom, right].
-                    margin: [0, 0, 0, 0],
+                    // Kept as real page margins: this converter paginates by
+                    // slicing one tall image, and moving the margins into the
+                    // layout instead put the slice boundaries out of step with
+                    // the page height, cutting and repeating content.
+                    margin: [${pageMarginBlockMm}, ${pageMarginSideMm}, ${pageMarginBlockMm}, ${pageMarginSideMm}],
                     image: { type: 'jpeg', quality: 0.98 },
                     html2canvas: {
                         scale: 2,
@@ -130,8 +137,14 @@ export function buildConversionDocument(
         })();
     </script>`;
 
+    // Unlike the Chrome export, this page can load the vendored stylesheet, so
+    // it is linked rather than inlined with its fonts.
+    const headTags = katexUri
+        ? `${csp}\n    <link rel="stylesheet" href="${katexUri}">`
+        : csp;
+
     const withCsp = fullHtml.includes('<head>')
-        ? fullHtml.replace('<head>', `<head>\n    ${csp}`)
+        ? fullHtml.replace('<head>', `<head>\n    ${headTags}`)
         : fullHtml;
 
     return withCsp.includes('</body>')
@@ -147,7 +160,8 @@ export async function exportPdfWithWebview(
     fullHtml: string,
     targetUri: vscode.Uri,
     theme?: ThemeTokens,
-    policy: OversizedBlockPolicy = 'fit'
+    policy: OversizedBlockPolicy = 'fit',
+    onStage?: (stage: string) => void
 ): Promise<void> {
     const panel = vscode.window.createWebviewPanel(
         'prettyMarkdownPdfExport',
@@ -169,6 +183,11 @@ export async function exportPdfWithWebview(
                 vscode.Uri.joinPath(context.extensionUri, 'media', 'vendor', 'mermaid.min.js')
             )
             : undefined;
+        const katexUri = fullHtml.includes('class="katex')
+            ? panel.webview.asWebviewUri(
+                vscode.Uri.joinPath(context.extensionUri, 'media', 'vendor', 'katex', 'katex.min.css')
+            )
+            : undefined;
         const nonce = getNonce();
 
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -179,6 +198,12 @@ export async function exportPdfWithWebview(
 
             const messageSubscription = panel.webview.onDidReceiveMessage((message) => {
                 if (!message) {
+                    return;
+                }
+                if (message.type === 'pdf-stage' && typeof message.stage === 'string') {
+                    // Rasterising a long document takes a while and looks
+                    // hung without this.
+                    onStage?.(message.stage);
                     return;
                 }
                 if (message.type === 'pdf-ready' && message.data) {
@@ -197,7 +222,7 @@ export async function exportPdfWithWebview(
 
             context.subscriptions.push(messageSubscription, disposeSubscription);
             panel.webview.html = buildConversionDocument(
-                fullHtml, scriptUri, nonce, panel.webview.cspSource, mermaidUri, theme, policy
+                fullHtml, scriptUri, nonce, panel.webview.cspSource, mermaidUri, theme, policy, katexUri
             );
         });
 

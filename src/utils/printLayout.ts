@@ -63,6 +63,24 @@ export function policyOf(setting: OversizedBlockSetting): OversizedBlockPolicy {
 }
 
 /**
+ * Script body that opens every collapsed `<details>` section.
+ *
+ * A closed section prints as nothing but its summary line, so the content a
+ * reader folded away in the preview would be missing from their PDF. Run
+ * before the fit pass below, which measures the heights that result.
+ */
+export function getPrintExpandScript(): string {
+    return `
+        (function () {
+            document.querySelectorAll('details:not([open])').forEach(function (section) {
+                section.open = true;
+                section.setAttribute('data-pretty-print-expanded', '');
+            });
+        })();
+    `;
+}
+
+/**
  * Script body that makes oversized blocks fit the printed page, evaluating to
  * a {@link PrintFitResult}.
  *
