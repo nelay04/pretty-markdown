@@ -18,6 +18,7 @@ import {
 import { renderMarkdown, containsMermaid, containsMath } from './markdownRenderer';
 import { getWebviewContent } from '../utils/htmlGenerator';
 import { exportPdfWithWebview } from './webviewPdfExporter';
+import { getExportTimeouts, ExportTimeouts } from './exportSettings';
 import { getMermaidBootScript, getMermaidCleanupScript, mermaidReadyFlag } from '../utils/mermaid';
 import {
     getPrintExpandScript,
@@ -139,9 +140,6 @@ const launchArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-s
 
 /** Set once the install has been offered, so it is only offered up front once. */
 const librariesOfferedKey = 'prettyMarkdown.chromeLibrariesOffered';
-
-/** Diagrams should never hold the export open for long. */
-const mermaidRenderTimeoutMs = 20000;
 
 /** Paper the PDF is printed on, shared by the print-fit pass below. */
 const pageSetup = { pageWidthMm: 210, pageHeightMm: 297, marginSideMm: 5, marginBlockMm: 10 };
@@ -490,7 +488,12 @@ function inlineImage(absolutePath: string): string | undefined {
  * Diagram failures must not sink the export, so a timeout or a missing library
  * simply leaves the diagram as its source text in the PDF.
  */
-async function renderMermaidDiagrams(page: Page, context: vscode.ExtensionContext, theme: ThemeTokens): Promise<void> {
+async function renderMermaidDiagrams(
+    page: Page,
+    context: vscode.ExtensionContext,
+    theme: ThemeTokens,
+    diagramTimeoutMs: number
+): Promise<void> {
     const mermaidPath = path.join(context.extensionPath, 'media', 'vendor', 'mermaid.min.js');
 
     if (!fs.existsSync(mermaidPath)) {
@@ -500,7 +503,7 @@ async function renderMermaidDiagrams(page: Page, context: vscode.ExtensionContex
     try {
         await page.addScriptTag({ path: mermaidPath });
         await page.evaluate(getMermaidBootScript({ variables: getMermaidThemeVariables(theme) }));
-        await page.waitForFunction(`window.${mermaidReadyFlag} === true`, { timeout: mermaidRenderTimeoutMs });
+        await page.waitForFunction(`window.${mermaidReadyFlag} === true`, { timeout: diagramTimeoutMs });
         await page.evaluate(getMermaidCleanupScript());
     } catch {
         // Leave the source text in place rather than failing the export.
@@ -518,7 +521,8 @@ async function exportWithoutBrowser(
     progress: vscode.Progress<{ message?: string; increment?: number }>,
     launchError: unknown,
     theme: ThemeTokens,
-    policy: OversizedBlockPolicy
+    policy: OversizedBlockPolicy,
+    timeouts: ExportTimeouts
 ): Promise<void> {
     const defaultPath = document.fileName.replace(/\.md$/, '.pdf');
     const pdfPath = await vscode.window.showSaveDialog({
@@ -531,7 +535,7 @@ async function exportWithoutBrowser(
     }
 
     progress.report({ increment: 30, message: 'Chrome unavailable, using built-in converter...' });
-    await exportPdfWithWebview(context, fullHtml, pdfPath, theme, policy, stage => {
+    await exportPdfWithWebview(context, fullHtml, pdfPath, theme, policy, timeouts, stage => {
         progress.report({ message: `Built-in converter: ${stage}` });
     });
     progress.report({ increment: 40, message: 'Done!' });
@@ -559,6 +563,21 @@ async function exportWithoutBrowser(
             );
         }
     });
+}
+
+/**
+ * A timeout that reaches the user as "Navigation timeout of 30000 ms exceeded"
+ * says nothing about what to do next. The setting that governs it does.
+ */
+function describeExportFailure(error: unknown, documentTimeoutMs: number): string {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (/timeout|timed out/i.test(message)) {
+        return `the document took longer than ${Math.round(documentTimeoutMs / 1000)} seconds to lay out. ` +
+            'Raise prettyMarkdown.exportTimeout, or set it to 0 to wait for as long as it takes.';
+    }
+
+    return message;
 }
 
 /**
@@ -591,6 +610,7 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
     });
     const fallbackHtml = needsMath ? getWebviewContent(html, title, { theme }) : fullHtml;
     const needsMermaid = containsMermaid(html);
+    const timeouts = getExportTimeouts(document.uri);
 
     vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
@@ -608,7 +628,7 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
                 // converter rather than failing the export outright.
                 await exportWithoutBrowser(
                     document, context, fallbackHtml, progress, launchError, theme,
-                    policyOf(getOversizedDiagramSetting(document.uri))
+                    policyOf(getOversizedDiagramSetting(document.uri)), timeouts
                 );
                 return;
             }
@@ -617,7 +637,11 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
 
             try {
                 const page = await browser.newPage();
-                await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+                // A long or image-heavy document can take well past Chrome's own
+                // 30-second default to settle, and that failure costs the whole
+                // export, so the budget is the user's to set.
+                page.setDefaultNavigationTimeout(timeouts.documentMs);
+                await page.setContent(fullHtml, { waitUntil: 'networkidle0', timeout: timeouts.documentMs });
 
                 // Lay the page out exactly as it will be printed, so diagrams
                 // are drawn at their final width and the fit pass below
@@ -627,7 +651,7 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
 
                 if (needsMermaid) {
                     progress.report({ message: 'Rendering diagrams...' });
-                    await renderMermaidDiagrams(page, context, theme);
+                    await renderMermaidDiagrams(page, context, theme, timeouts.diagramMs);
                 }
 
                 // A section left collapsed would print as its summary alone.
@@ -684,7 +708,9 @@ export async function exportToPDF(document: vscode.TextDocument, context: vscode
                 await closeBrowserSafely(browser);
             }
         } catch (error) {
-            vscode.window.showErrorMessage(`Failed to export PDF: ${error}`);
+            vscode.window.showErrorMessage(
+                `Failed to export PDF: ${describeExportFailure(error, timeouts.documentMs)}`
+            );
         }
     });
 }

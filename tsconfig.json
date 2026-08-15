@@ -1,6 +1,11 @@
 {
 	"compilerOptions": {
-		"module": "Node16",
+		/* esbuild bundles this project, not tsc: describing the modules as ESM
+		   is what lets an ESM-only dependency (@puppeteer/browsers) be imported
+		   without tsc objecting to a require() call it will never emit. */
+		"module": "ES2022",
+		"moduleResolution": "Node",
+		"esModuleInterop": true,
 		"target": "ES2022",
 		"lib": [
 			"ES2022"

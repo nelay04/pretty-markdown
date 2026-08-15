@@ -75,6 +75,26 @@ npm run package        # vsce package -> .vsix
 
 Note that `compile` does **not** produce `dist/` — only `watch:esbuild` and `package-build` do. If the Extension Development Host says the extension can't be found, `dist/extension.js` is probably missing; run `npm run package-build` once to prove the bundle builds.
 
+### The pre-commit hook
+
+`npm install` runs `prepare`, which points `core.hooksPath` at [`.githooks/`](../../.githooks). Nothing else has to be remembered, and the hook is version-controlled rather than copied into `.git/hooks`, where it would rot out of date. Re-run it by hand any time with:
+
+```bash
+node scripts/install-hooks.js
+```
+
+Every commit then runs three checks, and blocks on any of them:
+
+| Check | What it runs |
+|---|---|
+| repo rules | `scripts/check-staged.js` — merge conflict markers and emoji, in the lines the commit **adds** |
+| check-types | `tsc --noEmit` |
+| lint | `eslint src` |
+
+Only added lines are examined for the repo rules, so files that already carry an emoji — the README's closing lines, esbuild's error glyph — do not block work that has nothing to do with them. A commit touching `src/` without `CHANGELOG.md` gets a note rather than a refusal, because only the author knows whether the change is user-visible.
+
+About four seconds in total. `git commit --no-verify` skips it when you genuinely need to, and `git commit --allow-empty -m "test hook"` is the quickest way to watch it run.
+
 ---
 
 ## 4. The edit → see-it-work loop
@@ -190,6 +210,7 @@ npm test   # runs pretest (compile + lint), then vscode-test
 
 ```json
 "overrides": {
+  "@puppeteer/browsers": "^3.2.0",
   "diff": "^8.0.4",
   "serialize-javascript": "^7.1.0",
   "tar-fs": "^3.1.1",
@@ -199,6 +220,17 @@ npm test   # runs pretest (compile + lint), then vscode-test
 
 - `diff` / `serialize-javascript` patch advisories inside mocha, which pins older majors.
 - `tar-fs` / `ws` patch the tree under `puppeteer-core`, which is deliberately held at **21.11.0**.
+- `@puppeteer/browsers` patches the same tree, and is the one override that needs explaining.
+
+### Why @puppeteer/browsers is forced to 3.x
+
+Every version of `extract-zip` carries [GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv) and no fixed release exists, so the only way out is a version of `@puppeteer/browsers` that no longer uses it. That is 3.x, which unpacks with `modern-tar` instead. The override is what reaches the second copy, the one `puppeteer-core@21.11.0` carries for its own launcher.
+
+`@puppeteer/browsers@3` is **ESM-only**, and that is the whole reason it declares `node >= 22.12.0`: 22.12 is where `require()` of an ES module became possible. Nothing in it needs a Node 22 API. esbuild inlines the module at build time and the bundle stays CommonJS, so the extension host never requires it and the floor does not reach our users.
+
+What it does reach is `tsc`, which under `"module": "Node16"` refused the import as a `require()` call it would emit — an emit this project never uses, because esbuild builds it. `tsconfig.json` therefore says `"module": "ES2022"` with `"moduleResolution": "Node"`, describing the bundler that actually consumes the code. The emitted bundle is byte-for-byte identical either way; only type-checking changes.
+
+Upstream's own fix is `puppeteer-core@25`, which is not available here: see the pin below. Verify a change to any of this by exporting a PDF **and** by deleting `~/.cache/puppeteer` and letting the extension download Chrome again, since the download is the only path that unpacks an archive.
 
 ### Why the markdown-it plugins are there
 

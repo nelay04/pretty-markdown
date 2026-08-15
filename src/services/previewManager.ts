@@ -10,6 +10,9 @@ let previewPanel: vscode.WebviewPanel | undefined;
 let previewDocumentUri: vscode.Uri | undefined;
 let messageSubscription: vscode.Disposable | undefined;
 
+/** The file the preview took the place of, so closing it can give it back. */
+let replacedDocumentUri: vscode.Uri | undefined;
+
 function getNonce(): string {
     let text = '';
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -87,53 +90,138 @@ async function openLinkTarget(document: vscode.TextDocument, href: string): Prom
     await vscode.commands.executeCommand('vscode.open', target, { viewColumn: vscode.ViewColumn.One });
 }
 
+/** Where the preview opens, matching prettyMarkdown.openPreviewIn. */
+type PreviewLocation = 'beside' | 'active' | 'replace';
+
+/**
+ * Read on every open, so moving the setting moves the next preview without a
+ * reload.
+ */
+function getPreviewLocation(resource?: vscode.Uri): PreviewLocation {
+    const location = vscode.workspace
+        .getConfiguration('prettyMarkdown', resource)
+        .get<string>('openPreviewIn', 'beside');
+
+    return location === 'active' || location === 'replace' ? location : 'beside';
+}
+
+function findSourceEditor(document: vscode.TextDocument): vscode.TextEditor | undefined {
+    return vscode.window.visibleTextEditors.find(
+        editor => editor.document.uri.toString() === document.uri.toString()
+    );
+}
+
+/** The group the preview belongs in: a new one beside, or the file's own. */
+function getPreviewColumn(location: PreviewLocation, document: vscode.TextDocument): vscode.ViewColumn {
+    if (location === 'beside') {
+        return vscode.ViewColumn.Beside;
+    }
+
+    return findSourceEditor(document)?.viewColumn || vscode.ViewColumn.Active;
+}
+
+/**
+ * Give the preview the file's place in its group.
+ *
+ * A webview cannot be opened *as* an editor, so the panel is put in the same
+ * group first and the file's tab closed after: closing it first would take the
+ * group with it whenever the file is the only thing in it, and the preview
+ * would open somewhere else entirely.
+ */
+async function closeSourceEditor(document: vscode.TextDocument): Promise<boolean> {
+    const editor = findSourceEditor(document);
+    if (!editor) {
+        return false;
+    }
+
+    // closeActiveEditor is the only close there is; the tab has to be the
+    // active one before it can be the one that closes.
+    await vscode.window.showTextDocument(editor.document, { viewColumn: editor.viewColumn });
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    return true;
+}
+
 /**
  * Show or update the markdown preview panel
  */
-export function showPreview(document: vscode.TextDocument, context: vscode.ExtensionContext) {
+export async function showPreview(document: vscode.TextDocument, context: vscode.ExtensionContext): Promise<void> {
+    const location = getPreviewLocation(document.uri);
+    const column = getPreviewColumn(location, document);
+
     if (previewPanel) {
-        previewPanel.reveal(vscode.ViewColumn.Beside);
+        previewPanel.reveal(column);
         updatePreview(document, context);
+    } else {
+        previewPanel = vscode.window.createWebviewPanel(
+            'prettyMarkdownPreview',
+            'Markdown Preview',
+            column,
+            {
+                enableScripts: true,
+                localResourceRoots: getLocalResourceRoots(document, context)
+            }
+        );
+
+        messageSubscription = previewPanel.webview.onDidReceiveMessage(async (message) => {
+            if (!message || message.type !== 'open-link' || typeof message.href !== 'string') {
+                return;
+            }
+
+            // Resolve against the document currently shown, which may differ from
+            // the one the panel was opened with.
+            let source = document;
+            if (previewDocumentUri) {
+                try {
+                    source = await vscode.workspace.openTextDocument(previewDocumentUri);
+                } catch {
+                    // Fall back to the document the preview was opened with.
+                }
+            }
+
+            await openLinkTarget(source, message.href);
+        });
+
+        previewPanel.onDidDispose(() => {
+            messageSubscription?.dispose();
+            messageSubscription = undefined;
+            previewPanel = undefined;
+            previewDocumentUri = undefined;
+            replacedDocumentUri = undefined;
+        });
+
+        updatePreview(document, context);
+    }
+
+    if (location === 'replace' && await closeSourceEditor(document)) {
+        replacedDocumentUri = document.uri;
+        // Closing the file leaves the focus wherever that group puts it next.
+        previewPanel?.reveal();
+    }
+}
+
+/**
+ * Close the preview, and put back the file it was standing in for.
+ *
+ * Only an explicit close restores the file: closing the tab by hand is the
+ * user closing a tab, and reopening a file they just closed would be the last
+ * thing they asked for.
+ */
+export async function closePreview(): Promise<void> {
+    const panel = previewPanel;
+    if (!panel) {
         return;
     }
 
-    previewPanel = vscode.window.createWebviewPanel(
-        'prettyMarkdownPreview',
-        'Markdown Preview',
-        vscode.ViewColumn.Beside,
-        {
-            enableScripts: true,
-            localResourceRoots: getLocalResourceRoots(document, context)
-        }
-    );
+    const restore = replacedDocumentUri;
+    const column = panel.viewColumn;
+    panel.dispose();
 
-    messageSubscription = previewPanel.webview.onDidReceiveMessage(async (message) => {
-        if (!message || message.type !== 'open-link' || typeof message.href !== 'string') {
-            return;
-        }
+    if (!restore) {
+        return;
+    }
 
-        // Resolve against the document currently shown, which may differ from
-        // the one the panel was opened with.
-        let source = document;
-        if (previewDocumentUri) {
-            try {
-                source = await vscode.workspace.openTextDocument(previewDocumentUri);
-            } catch {
-                // Fall back to the document the preview was opened with.
-            }
-        }
-
-        await openLinkTarget(source, message.href);
-    });
-
-    previewPanel.onDidDispose(() => {
-        messageSubscription?.dispose();
-        messageSubscription = undefined;
-        previewPanel = undefined;
-        previewDocumentUri = undefined;
-    });
-
-    updatePreview(document, context);
+    const document = await vscode.workspace.openTextDocument(restore);
+    await vscode.window.showTextDocument(document, { viewColumn: column, preview: false });
 }
 
 /**

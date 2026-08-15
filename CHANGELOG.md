@@ -10,7 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - Export to HTML functionality
 - Table of contents generation
-- Setting for opening the preview in the current tab or a new one
+
+## [1.8.0] - 16-08-2026
+
+### Added
+- **Export timeouts you can set**: A long or image-heavy document could fail with "Navigation timeout of 30000 ms exceeded" and nothing to show for the export. `prettyMarkdown.exportTimeout` now decides how long an export may spend laying the document out — two minutes by default, or `0` to wait for as long as it takes — and `prettyMarkdown.diagramTimeout` does the same for drawing its diagrams. Both apply to the built-in converter as well, and both can be set from the Pretty Markdown settings page.
+- **Choose where the preview opens**: `prettyMarkdown.openPreviewIn` opens the preview in a new editor group beside the Markdown file, as it always has, as a tab in the editor group the file is already in, or in the file's own place. The last of those closes the file's editor, so the preview takes its tab.
+- **Close Preview**: The preview's title bar carries a struck-through eye that closes it, and puts the file back when the preview replaced it. With the file's editor gone there is nothing for the eye that opened the preview to act on, so the way back needed a button of its own.
+
+### Changed
+- **A smaller extension, with no known vulnerable dependencies**: the library that downloads and unpacks Chrome was replaced with a version that no longer carries a vulnerable zip extractor. It brings six fewer packages with it, so the extension itself is around a third smaller to download. PDF export is unchanged.
+- **The settings page follows the VS Code settings editor**: Every setting now carries a title, a description and its control in the same layout the built-in editor uses, with themed checkboxes, dropdowns and text boxes in place of the browser's own, and a bar down the left of any setting that no longer holds its default.
+
+### Fixed
+- **A timed-out export says what to do next**: The failure reached you as Chrome's own "Navigation timeout of 30000 ms exceeded", which named neither the document nor a way forward. It now says how long the export waited and which setting extends it.
 
 ## [1.7.0] - 15-08-2026
 

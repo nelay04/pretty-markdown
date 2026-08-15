@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { PrettyMarkdownViewProvider } from './providers/treeViewProvider';
 import { PrettyMarkdownGroupItem, PrettyMarkdownActionsGroupItem } from './types';
-import { showPreview, updatePreview, getPreviewPanel } from './services/previewManager';
+import { showPreview, updatePreview, getPreviewPanel, closePreview } from './services/previewManager';
 import { exportToPDF, cleanupLegacyBrowserCache } from './services/pdfExporter';
 import { getMarkdownLabel } from './utils/helpers';
 import { MarkdownAction } from './services/actionScanner';
@@ -79,14 +79,20 @@ export function activate(context: vscode.ExtensionContext) {
     restartActionStatus.hide();
 
     // Register preview command
-    const previewCommand = vscode.commands.registerCommand('pretty-markdown.preview', () => {
+    const previewCommand = vscode.commands.registerCommand('pretty-markdown.preview', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.languageId !== 'markdown') {
             vscode.window.showErrorMessage('Please open a Markdown file first!');
             return;
         }
 
-        showPreview(editor.document, context);
+        await showPreview(editor.document, context);
+    });
+
+    // The preview's own title bar carries this: with the file replaced, the
+    // eye that opened the preview has no editor left to act on.
+    const closePreviewCommand = vscode.commands.registerCommand('pretty-markdown.closePreview', async () => {
+        await closePreview();
     });
 
     // Register PDF export command
@@ -268,6 +274,7 @@ export function activate(context: vscode.ExtensionContext) {
         treeView,
         previewCommand,
         exportCommand,
+        closePreviewCommand,
         markdownWatcher,
         workspaceFolderWatcher,
         activeEditorWatcher,

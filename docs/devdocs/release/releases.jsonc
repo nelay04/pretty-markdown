@@ -43,5 +43,11 @@
     "dated": "15-Aug-2026-07:09-pm",
     "releaseTitle": "Release v1.7.0",
     "releaseNoteFile": "notes/v1.7.0.md"
+  },
+  {
+    "releaseName": "1.8.0",
+    "dated": "16-Aug-2026-01:35-am",
+    "releaseTitle": "Release v1.8.0",
+    "releaseNoteFile": "notes/v1.8.0.md"
   }
 ]

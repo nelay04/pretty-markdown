@@ -4,5 +4,6 @@ node_modules
 .vscode-test/
 *.vsix
 *cwd
-vsixmedia/vendor/
+vsix
+media/vendor/
 docs/devdocs/resources/*.pdf

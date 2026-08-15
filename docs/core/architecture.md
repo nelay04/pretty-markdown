@@ -37,7 +37,8 @@ src/
     chromeLibraries.ts    Linux: which libraries Chrome lacks, and installing them
     katexAssets.ts        katex stylesheet: linked for webviews, inlined for Chrome
     themeManager.ts       theme presets + prettyMarkdown.colors overrides -> ThemeTokens
-    settingsManager.ts    the settings webview (palette pickers, confirmation toggle)
+    exportSettings.ts     export timeouts: seconds in settings, milliseconds everywhere else
+    settingsManager.ts    the settings webview: preview, export, action and palette controls
     actionScanner.ts      finds runnable commands in a Markdown file
     actionRunner.ts       runs them in a terminal; pause/stop/restart state
   utils/
@@ -90,6 +91,8 @@ When no Chrome can run, [`webviewPdfExporter.ts`](../../src/services/webviewPdfE
 On Linux a Chrome that exists can still refuse to start, because it links against system libraries a minimal image may not carry (`libnss3`, `libnspr4`, `libasound2`). [`chromeLibraries.ts`](../../src/services/chromeLibraries.ts) checks the linker rather than inferring from a launch failure — with no Chrome installed there is no failure to learn from, and a 185 MB download cannot supply a missing library. It offers the install once per machine, then leaves the offer on the notification that follows the fallback export.
 
 Installing needs root. Where `sudo -n` already grants it the install runs unattended; otherwise the command goes into a terminal and the extension watches the linker until the libraries appear. Prompting for a password in a dialog and handing it to `sudo` is not something this extension does.
+
+Both engines run to a budget from [`exportSettings.ts`](../../src/services/exportSettings.ts): `prettyMarkdown.exportTimeout` for laying the document out — Chrome's page load, or the whole conversion in the fallback — and `prettyMarkdown.diagramTimeout` for drawing diagrams. Zero means no limit, which is what puppeteer's own timeout options already take it to mean, so a configured value passes straight through. A document budget large enough to matter is the difference between a long file exporting and failing with Chrome's default 30-second navigation timeout, so a timeout that does reach the user names the setting that changes it.
 
 `puppeteer-core` is pinned to **21.11.0** on purpose; see the reasoning in [local-development.md](local-development.md#9-dependency-hygiene) before touching it.
 

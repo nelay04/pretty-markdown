@@ -26,7 +26,7 @@ npm run watch          # the F5 build task: esbuild + tsc, in parallel
 npm run package-build  # production bundle -> dist/
 ```
 
-Run `npm run check-types && npm run lint` before calling any change done. A green build is not evidence that an export works — for anything touching the PDF path, export a real PDF and confirm the file exists.
+A pre-commit hook in `.githooks/` runs both of those plus `scripts/check-staged.js`, and `npm install` installs it through `prepare`. Run `npm run check-types && npm run lint` before calling any change done. A green build is not evidence that an export works — for anything touching the PDF path, export a real PDF and confirm the file exists.
 
 ## Code standards
 

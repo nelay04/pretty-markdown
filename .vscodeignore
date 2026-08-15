@@ -10,6 +10,8 @@ vsc-extension-quickstart.md
 docs/**
 .github/**
 .claude/**
+.githooks/**
+scripts/**
 vsix/**
 Test-Markdown.md
 CONTRIBUTING.md

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { getMermaidBootScript, getMermaidCleanupScript, mermaidReadyFlag } from '../utils/mermaid';
 import { getPrintExpandScript, getPrintFitScript, OversizedBlockPolicy } from '../utils/printLayout';
 import { ThemeTokens, getMermaidThemeVariables } from './themeManager';
+import { ExportTimeouts, defaultExportTimeouts } from './exportSettings';
 
 /**
  * PDF export that needs no browser download: the page is rendered in a webview
@@ -11,9 +12,6 @@ import { ThemeTokens, getMermaidThemeVariables } from './themeManager';
  * larger than a Chrome export. It exists as a fallback for machines where
  * Chrome cannot run at all.
  */
-
-const conversionTimeoutMs = 120000;
-const mermaidTimeoutMs = 20000;
 
 /** Page margins, in millimetres, of the A4 pages html2pdf produces. */
 const pageMarginSideMm = 5;
@@ -40,7 +38,8 @@ export function buildConversionDocument(
     mermaidUri?: vscode.Uri,
     theme?: ThemeTokens,
     policy: OversizedBlockPolicy = 'fit',
-    katexUri?: vscode.Uri
+    katexUri?: vscode.Uri,
+    diagramTimeoutMs: number = defaultExportTimeouts.diagramMs
 ): string {
     const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; ` +
         `img-src ${cspSource} data: https: http:; style-src 'unsafe-inline' ${cspSource}; ` +
@@ -69,7 +68,7 @@ export function buildConversionDocument(
                 ${mermaidUri ? getMermaidBootScript(theme ? { variables: getMermaidThemeVariables(theme) } : {}) : `window.${mermaidReadyFlag} = true;`}
 
                 return new Promise((resolve) => {
-                    const deadline = Date.now() + ${mermaidTimeoutMs};
+                    const deadline = ${diagramTimeoutMs > 0 ? `Date.now() + ${diagramTimeoutMs}` : 'Infinity'};
                     const poll = () => {
                         if (window.${mermaidReadyFlag} === true || Date.now() > deadline) {
                             resolve();
@@ -161,6 +160,7 @@ export async function exportPdfWithWebview(
     targetUri: vscode.Uri,
     theme?: ThemeTokens,
     policy: OversizedBlockPolicy = 'fit',
+    timeouts: ExportTimeouts = defaultExportTimeouts,
     onStage?: (stage: string) => void
 ): Promise<void> {
     const panel = vscode.window.createWebviewPanel(
@@ -191,10 +191,11 @@ export async function exportPdfWithWebview(
         const nonce = getNonce();
 
         const base64 = await new Promise<string>((resolve, reject) => {
-            const timeout = setTimeout(
-                () => reject(new Error('Timed out while generating the PDF.')),
-                conversionTimeoutMs
-            );
+            // A budget of zero is the user asking for no limit at all; the
+            // panel closing still ends the wait.
+            const timeout = timeouts.documentMs > 0
+                ? setTimeout(() => reject(new Error('Timed out while generating the PDF.')), timeouts.documentMs)
+                : undefined;
 
             const messageSubscription = panel.webview.onDidReceiveMessage((message) => {
                 if (!message) {
@@ -222,7 +223,8 @@ export async function exportPdfWithWebview(
 
             context.subscriptions.push(messageSubscription, disposeSubscription);
             panel.webview.html = buildConversionDocument(
-                fullHtml, scriptUri, nonce, panel.webview.cspSource, mermaidUri, theme, policy, katexUri
+                fullHtml, scriptUri, nonce, panel.webview.cspSource, mermaidUri, theme, policy, katexUri,
+                timeouts.diagramMs
             );
         });
 

@@ -1,0 +1,252 @@
+#!/bin/sh
+# Pretty Markdown pre-commit hook: repo rules, tsc and eslint, before anything
+# reaches a commit. Installed by scripts/install-hooks.js, which points
+# core.hooksPath here from npm's prepare lifecycle.
+#
+# Test command: `git commit --allow-empty -m "test hook"` to see it run.
+# Bypass the hook with `git commit --no-verify` (not recommended).
+
+# ---- Terminal capabilities -------------------------------------------------
+# Colours and animation are only emitted on a real terminal so piped or CI runs
+# stay clean. NO_COLOR is honoured as the standard opt-out.
+# Escapes are stored as real control bytes, not as "\033" text, so they survive
+# being passed through "%s" arguments and not just printf format strings.
+E=$(printf '\033')
+
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    INTERACTIVE=1
+    RED="${E}[1;91m"
+    GREEN="${E}[1;92m"
+    BLUE="${E}[1;94m"
+    GREY="${E}[0;90m"
+    BOLD="${E}[1;97m"
+    NC="${E}[0m"
+    BADGE_PASS="${E}[1;30;102m PASS ${E}[0m"
+    BADGE_FAIL="${E}[1;97;101m FAIL ${E}[0m"
+    HIDE_CURSOR="${E}[?25l"
+    SHOW_CURSOR="${E}[?25h"
+    CLEAR_LINE="\r${E}[2K"
+else
+    INTERACTIVE=0
+    RED=''; GREEN=''; BLUE=''; GREY=''; BOLD=''; NC=''
+    BADGE_PASS='PASS'; BADGE_FAIL='FAIL'
+    HIDE_CURSOR=''; SHOW_CURSOR=''; CLEAR_LINE='\r'
+fi
+
+# ---- Responsive width ------------------------------------------------------
+COLS=$(tput cols 2>/dev/null)
+[ -z "$COLS" ] && COLS=$(stty size 2>/dev/null | cut -d' ' -f2)
+case "$COLS" in ''|*[!0-9]*) COLS=80 ;; esac
+[ "$COLS" -gt 78 ] && COLS=78
+[ "$COLS" -lt 32 ] && COLS=32
+
+NARROW=0
+[ "$COLS" -lt 60 ] && NARROW=1
+
+# ---- Tree glyphs -----------------------------------------------------------
+# Rounded box-drawing when the locale can render it, plain ASCII otherwise, so
+# the layout never degrades into mojibake on a non-UTF-8 console.
+case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in
+    *UTF-8*|*utf-8*|*UTF8*|*utf8*)
+        T_OPEN='╭─'; T_PIPE='│'; T_END='╰─'; T_RULE='─' ;;
+    *)
+        T_OPEN=',-'; T_PIPE='|'; T_END='`-'; T_RULE='-' ;;
+esac
+
+TAIL_STUB=8   # length of the short trailing rule that closes a block
+
+repeat() {
+    _r_i=0
+    _r_out=''
+    while [ "$_r_i" -lt "$2" ]; do
+        _r_out="${_r_out}$1"
+        _r_i=$(( _r_i + 1 ))
+    done
+    printf '%s' "$_r_out"
+}
+
+# Visible length of a label, with colour escapes discounted so the trailing
+# rules are measured against what the eye actually sees.
+vislen() {
+    _v_plain=$(printf '%s' "$1" | sed "s/${E}\[[0-9;?]*[a-zA-Z]//g")
+    printf '%d' "${#_v_plain}"
+}
+
+rule()  { printf "${GREY}%s${NC}\n" "$(repeat "$T_RULE" "$COLS")"; }
+item()  { printf "${BLUE}${T_PIPE}${NC}  %s\n" "$1"; }   # a line inside the block
+bar()   { printf "${BLUE}${T_PIPE}${NC}\n"; }            # spacer, keeps the trunk
+
+# Opens a block: label followed by a rule that runs to the right edge.
+top() {
+    _t_fill=$(( COLS - $(vislen "$1") - 4 ))
+    [ "$_t_fill" -lt 0 ] && _t_fill=0
+    printf "${BLUE}%s${NC} %s ${BLUE}%s${NC}\n" "$T_OPEN" "$1" "$(repeat "$T_RULE" "$_t_fill")"
+}
+
+# Closes a block: label followed by a short trailing rule.
+end() {
+    _e_room=$(( COLS - $(vislen "$1") - 4 ))
+    _e_fill=$TAIL_STUB
+    [ "$_e_fill" -gt "$_e_room" ] && _e_fill=$_e_room
+    [ "$_e_fill" -lt 0 ] && _e_fill=0
+    printf "${BLUE}%s${NC} %s ${BLUE}%s${NC}\n" "$T_END" "$1" "$(repeat "$T_RULE" "$_e_fill")"
+}
+
+# Picks the wide label, or the short one when the terminal cannot fit it.
+pick() {
+    if [ "$NARROW" -eq 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi
+}
+
+# ---- Banner ----------------------------------------------------------------
+banner() {
+    if [ "$COLS" -ge 44 ]; then
+        printf "${BLUE}%s${NC}\n" \
+            ' ___   _  _    ___   __      __ __   __' \
+            '/ __| | \| |  / _ \  \ \    / / \ \ / /' \
+            '\__ \ | .` | | (_) |  \ \/\/ /   \ V / ' \
+            '|___/ |_|\_|  \___/    \_/\_/     |_|  '
+        printf "${GREY}  pretty markdown - pre-commit quality gate${NC}\n\n"
+    else
+        printf "${BLUE}SNOWY${NC} ${GREY}pre-commit quality gate${NC}\n\n"
+    fi
+}
+
+# ---- Snowfall spinner ------------------------------------------------------
+# Drifts a flake across a fixed track while a check buffers in the background.
+TRACK_WIDTH=10
+
+snow_frame() {
+    _pos=$(( $1 % TRACK_WIDTH ))
+    _i=0
+    _track=''
+    while [ "$_i" -lt "$TRACK_WIDTH" ]; do
+        if [ "$_i" -eq "$_pos" ]; then
+            _track="${_track}*"
+        elif [ $(( (_i + $1) % 4 )) -eq 0 ]; then
+            _track="${_track}."
+        else
+            _track="${_track} "
+        fi
+        _i=$(( _i + 1 ))
+    done
+    printf '%s' "$_track"
+}
+
+elapsed_since() {
+    _secs=$(( $(date +%s) - $1 ))
+    if [ "$_secs" -ge 60 ]; then
+        printf '%dm %02ds' $(( _secs / 60 )) $(( _secs % 60 ))
+    else
+        printf '%ds' "$_secs"
+    fi
+}
+
+WORK=$(mktemp -d 2>/dev/null || printf '/tmp/pretty-markdown-precommit.%s' "$$")
+mkdir -p "$WORK"
+FAIL_LOG="${WORK}/failures.log"
+STEP_PID=''
+
+cleanup() {
+    [ -n "$STEP_PID" ] && kill "$STEP_PID" 2>/dev/null
+    printf "${SHOW_CURSOR}"
+    rm -rf "$WORK"
+}
+trap 'cleanup' EXIT
+trap 'cleanup; exit 130' INT TERM
+
+# Git runs hooks from the top level, but a worktree or a wrapper may not.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+banner
+
+if sleep 0.1 2>/dev/null; then TICK='0.12'; else TICK='1'; fi
+FAILED=0
+STEP=0
+
+# ---- One check, buffered, with the flake drifting while it runs ----
+run_step() {
+    _label=$1
+    shift
+
+    STEP=$(( STEP + 1 ))
+    _log="${WORK}/step-${STEP}.log"
+    _started=$(date +%s)
+
+    if [ "$INTERACTIVE" -eq 1 ]; then
+        "$@" >"$_log" 2>&1 </dev/null &
+        STEP_PID=$!
+        printf "${HIDE_CURSOR}"
+        _frame=0
+        while kill -0 "$STEP_PID" 2>/dev/null; do
+            printf "${CLEAR_LINE}${BLUE}${T_PIPE}${NC}  ${BLUE}[%s]${NC} ${GREY}%s ... %s${NC}" \
+                "$(snow_frame "$_frame")" "$_label" "$(elapsed_since "$_started")"
+            _frame=$(( _frame + 1 ))
+            sleep "$TICK"
+        done
+        wait "$STEP_PID"
+        _status=$?
+        STEP_PID=''
+        printf "${CLEAR_LINE}${SHOW_CURSOR}"
+    else
+        "$@" >"$_log" 2>&1 </dev/null
+        _status=$?
+    fi
+
+    _took=$(elapsed_since "$_started")
+
+    if [ "$_status" -eq 0 ]; then
+        item "${BADGE_PASS} ${BOLD}${_label}${NC} ${GREY}in ${_took}${NC}"
+        return 0
+    fi
+
+    item "${BADGE_FAIL} ${BOLD}${_label}${NC} ${GREY}after ${_took}${NC}"
+    FAILED=$(( FAILED + 1 ))
+    {
+        printf '%s\n' "--- ${_label} ---"
+        cat "$_log"
+        printf '\n'
+    } >>"$FAIL_LOG"
+    return 1
+}
+
+top "$(pick "Checking what is about to be committed ${GREY}(repo rules, types, lint)${NC}" 'Pre-commit checks')"
+bar
+
+# ---- The checks need the toolchain the repo installs ----
+if [ ! -x node_modules/.bin/tsc ] || [ ! -x node_modules/.bin/eslint ]; then
+    item "${BADGE_FAIL} ${RED}Dependencies missing${NC}"
+    item "${GREY}tsc / eslint not found in node_modules/.bin${NC}"
+    bar
+    end "Run ${BOLD}npm install${NC} before committing"
+    exit 1
+fi
+
+run_step "$(pick 'repo rules   : staged lines' 'repo rules')" node scripts/check-staged.js
+run_step "$(pick 'check-types  : tsc --noEmit' 'check-types')" npm run --silent check-types
+run_step "$(pick 'lint         : eslint src' 'lint')" npm run --silent lint
+
+# ---- A behaviour change without a changelog entry is worth a word ----
+STAGED=$(git diff --cached --name-only)
+if printf '%s\n' "$STAGED" | grep -q '^src/' && ! printf '%s\n' "$STAGED" | grep -qx 'CHANGELOG.md'; then
+    bar
+    item "${GREY}note: src changed without CHANGELOG.md. User-visible changes belong${NC}"
+    item "${GREY}      under ## [Unreleased] in the same commit.${NC}"
+fi
+
+bar
+
+if [ "$FAILED" -eq 0 ]; then
+    end "${BADGE_PASS} $(pick "${GREEN}All checks passed${NC}" "${GREEN}Passed${NC}")"
+    printf "\n${GREEN}%s${NC}\n" "$(pick 'Pre-commit checks passed. Proceeding with commit.' 'Checks passed. Committing.')"
+    exit 0
+fi
+
+end "${BADGE_FAIL} $(pick "${RED}${FAILED} check(s) failed${NC}" "${RED}${FAILED} failed${NC}")"
+printf '\n'
+rule
+cat "$FAIL_LOG"
+rule
+printf "\n${RED}%s${NC}\n" "$(pick 'Pre-commit checks failed. Commit blocked.' 'Checks failed. Commit blocked.')"
+top "$(pick "Fix the issues above, or run ${BOLD}npm run fix${NC} for what eslint can settle" "Fix issues, or ${BOLD}npm run fix${NC}")"
+end "$(pick "Bypass with ${BOLD}git commit --no-verify${NC} ${GREY}(not recommended)${NC}" "Bypass: ${BOLD}git commit --no-verify${NC}")"
+exit 1

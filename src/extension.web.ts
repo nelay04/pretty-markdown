@@ -6,6 +6,9 @@ import { resolveTheme, getThemeCssVariables, getMermaidThemeVariables, ThemeToke
 
 let previewPanel: vscode.WebviewPanel | undefined;
 
+/** The file the preview took the place of, so closing it can give it back. */
+let replacedDocumentUri: vscode.Uri | undefined;
+
 /** Page margins, in millimetres, of the A4 pages html2pdf produces. */
 const pageMarginSideMm = 5;
 const pageMarginBlockMm = 10;
@@ -13,14 +16,20 @@ const pageMarginBlockMm = 10;
 export function activate(context: vscode.ExtensionContext) {
     console.log('Pretty Markdown (web) extension is now active!');
 
-    const previewCommand = vscode.commands.registerCommand('pretty-markdown.preview', () => {
+    const previewCommand = vscode.commands.registerCommand('pretty-markdown.preview', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.languageId !== 'markdown') {
             vscode.window.showErrorMessage('Please open a Markdown file first!');
             return;
         }
 
-        showPreview(editor.document, context);
+        await showPreview(editor.document, context);
+    });
+
+    // The preview's own title bar carries this: with the file replaced, the
+    // eye that opened the preview has no editor left to act on.
+    const closePreviewCommand = vscode.commands.registerCommand('pretty-markdown.closePreview', async () => {
+        await closePreview();
     });
 
     const exportCommand = vscode.commands.registerCommand('pretty-markdown.exportPDF', async () => {
@@ -55,6 +64,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         previewCommand,
         exportCommand,
+        closePreviewCommand,
         unsupportedActionCommand,
         unsupportedPauseCommand,
         unsupportedStopCommand,
@@ -62,30 +72,111 @@ export function activate(context: vscode.ExtensionContext) {
     );
 }
 
-function showPreview(document: vscode.TextDocument, context: vscode.ExtensionContext) {
-    if (previewPanel) {
-        previewPanel.reveal(vscode.ViewColumn.Beside);
-        updatePreview(document, context);
+/** Where the preview opens, matching prettyMarkdown.openPreviewIn. */
+type PreviewLocation = 'beside' | 'active' | 'replace';
+
+/**
+ * Read on every open, so moving the setting moves the next preview without a
+ * reload.
+ */
+function getPreviewLocation(resource?: vscode.Uri): PreviewLocation {
+    const location = vscode.workspace
+        .getConfiguration('prettyMarkdown', resource)
+        .get<string>('openPreviewIn', 'beside');
+
+    return location === 'active' || location === 'replace' ? location : 'beside';
+}
+
+function findSourceEditor(document: vscode.TextDocument): vscode.TextEditor | undefined {
+    return vscode.window.visibleTextEditors.find(
+        editor => editor.document.uri.toString() === document.uri.toString()
+    );
+}
+
+/** The group the preview belongs in: a new one beside, or the file's own. */
+function getPreviewColumn(location: PreviewLocation, document: vscode.TextDocument): vscode.ViewColumn {
+    if (location === 'beside') {
+        return vscode.ViewColumn.Beside;
+    }
+
+    return findSourceEditor(document)?.viewColumn || vscode.ViewColumn.Active;
+}
+
+/**
+ * Give the preview the file's place in its group. A webview cannot be opened
+ * *as* an editor, so the panel goes into the same group first and the file's
+ * tab closes after — closing it first would take the group with it whenever
+ * the file is the only thing in it.
+ */
+async function closeSourceEditor(document: vscode.TextDocument): Promise<boolean> {
+    const editor = findSourceEditor(document);
+    if (!editor) {
+        return false;
+    }
+
+    // closeActiveEditor is the only close there is; the tab has to be the
+    // active one before it can be the one that closes.
+    await vscode.window.showTextDocument(editor.document, { viewColumn: editor.viewColumn });
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    return true;
+}
+
+/**
+ * Close the preview, and put back the file it was standing in for. Only an
+ * explicit close restores the file: closing the tab by hand is the user
+ * closing a tab.
+ */
+async function closePreview(): Promise<void> {
+    const panel = previewPanel;
+    if (!panel) {
         return;
     }
 
-    const documentDir = vscode.Uri.joinPath(document.uri, '..');
+    const restore = replacedDocumentUri;
+    const column = panel.viewColumn;
+    panel.dispose();
 
-    previewPanel = vscode.window.createWebviewPanel(
-        'prettyMarkdownPreview',
-        'Markdown Preview',
-        vscode.ViewColumn.Beside,
-        {
-            enableScripts: true,
-            localResourceRoots: [documentDir, context.extensionUri]
-        }
-    );
+    if (!restore) {
+        return;
+    }
 
-    previewPanel.onDidDispose(() => {
-        previewPanel = undefined;
-    });
+    const document = await vscode.workspace.openTextDocument(restore);
+    await vscode.window.showTextDocument(document, { viewColumn: column, preview: false });
+}
 
-    updatePreview(document, context);
+async function showPreview(document: vscode.TextDocument, context: vscode.ExtensionContext): Promise<void> {
+    const location = getPreviewLocation(document.uri);
+    const column = getPreviewColumn(location, document);
+
+    if (previewPanel) {
+        previewPanel.reveal(column);
+        updatePreview(document, context);
+    } else {
+        const documentDir = vscode.Uri.joinPath(document.uri, '..');
+
+        previewPanel = vscode.window.createWebviewPanel(
+            'prettyMarkdownPreview',
+            'Markdown Preview',
+            column,
+            {
+                enableScripts: true,
+                localResourceRoots: [documentDir, context.extensionUri]
+            }
+        );
+
+        previewPanel.onDidDispose(() => {
+            previewPanel = undefined;
+            replacedDocumentUri = undefined;
+        });
+
+        updatePreview(document, context);
+    }
+
+    if (location === 'replace' && await closeSourceEditor(document)) {
+        replacedDocumentUri = document.uri;
+        // Closing the file leaves the focus wherever that group puts it next.
+        previewPanel?.reveal();
+    }
 }
 
 function updatePreview(document: vscode.TextDocument, context: vscode.ExtensionContext) {
@@ -375,7 +466,7 @@ ${getThemeCssVariables(palette)}
 
 async function exportToPDFWeb(document: vscode.TextDocument, context: vscode.ExtensionContext) {
     if (!previewPanel) {
-        showPreview(document, context);
+        await showPreview(document, context);
     }
 
     if (!previewPanel) {

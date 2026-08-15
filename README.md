@@ -115,6 +115,9 @@ Pretty Markdown works with zero configuration, and the colours can be changed wh
 | `prettyMarkdown.theme` | `default` (Pretty Light), `github` (GitHub), `dark` (Pretty Dark), or `sepia` (Sepia) |
 | `prettyMarkdown.colors` | Per-component overrides applied on top of the theme |
 | `prettyMarkdown.oversizedDiagrams` | What to do in a PDF when a diagram or image is too tall to fit in the space left on the page: `ask` (the default), `keepWhole`, or `split` |
+| `prettyMarkdown.openPreviewIn` | Where the preview opens: `beside` the Markdown file in a new editor group (the default), in the `active` editor group, or `replace` to open it in the file's own place. **Close Preview**, on the preview's title bar, closes the preview and puts a replaced file back |
+| `prettyMarkdown.exportTimeout` | Seconds a PDF export may spend laying the document out, `120` by default. Raise it for a long or image-heavy document that fails with a timeout, or set `0` to wait for as long as it takes |
+| `prettyMarkdown.diagramTimeout` | Seconds a PDF export waits for diagrams to be drawn, `20` by default. A diagram that is not ready in time is printed as its source text |
 
 Open **Pretty Markdown: Settings** to pick a theme and adjust individual colours with a colour picker, or edit them directly in `settings.json`:
 

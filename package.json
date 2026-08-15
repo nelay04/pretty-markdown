@@ -2,7 +2,7 @@
   "name": "pretty-markdown",
   "displayName": "Pretty Markdown",
   "description": "Beautiful Markdown preview and PDF export with syntax highlighting",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "publisher": "mistx",
   "author": {
     "name": "Snowy",
@@ -44,6 +44,7 @@
   "activationEvents": [
     "onLanguage:markdown",
     "onCommand:pretty-markdown.preview",
+    "onCommand:pretty-markdown.closePreview",
     "onCommand:pretty-markdown.exportPDF",
     "onCommand:pretty-markdown.refreshFiles",
     "onCommand:pretty-markdown.searchFiles",
@@ -142,6 +143,12 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "pretty-markdown.closePreview",
+        "title": "Close Preview",
+        "category": "Pretty Markdown",
+        "icon": "$(eye-closed)"
+      },
+      {
         "command": "pretty-markdown.openSettings",
         "title": "Settings",
         "category": "Pretty Markdown",
@@ -204,6 +211,11 @@
           "group": "navigation"
         },
         {
+          "command": "pretty-markdown.closePreview",
+          "when": "activeWebviewPanelId == prettyMarkdownPreview",
+          "group": "navigation"
+        },
+        {
           "command": "pretty-markdown.exportPDF",
           "when": "resourceExtname == .md",
           "group": "navigation"
@@ -225,6 +237,10 @@
         {
           "command": "pretty-markdown.preview",
           "when": "editorLangId == markdown"
+        },
+        {
+          "command": "pretty-markdown.closePreview",
+          "when": "activeWebviewPanelId == prettyMarkdownPreview"
         },
         {
           "command": "pretty-markdown.exportPDF",
@@ -432,11 +448,44 @@
           ],
           "default": "ask",
           "markdownDescription": "What to do when a diagram or image is too tall to fit in the space left on the page of an exported PDF."
+        },
+        "prettyMarkdown.exportTimeout": {
+          "type": "number",
+          "default": 120,
+          "minimum": 0,
+          "markdownDescription": "Seconds a PDF export may spend laying the document out before it gives up. Raise it for a long or image-heavy document that fails with a timeout; set it to `0` to wait for as long as it takes."
+        },
+        "prettyMarkdown.diagramTimeout": {
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "markdownDescription": "Seconds a PDF export waits for the diagrams in a document to be drawn. A diagram that is not ready in time is printed as its source text, so the export still finishes. Set it to `0` to wait for as long as it takes."
+        },
+        "prettyMarkdown.openPreviewIn": {
+          "type": "string",
+          "enum": [
+            "beside",
+            "active",
+            "replace"
+          ],
+          "enumItemLabels": [
+            "New editor group",
+            "Current editor group",
+            "Replace the file's editor"
+          ],
+          "enumDescriptions": [
+            "Open the preview in a new editor group beside the Markdown file",
+            "Open the preview as a tab in the editor group the Markdown file is in",
+            "Open the preview in the file's place, closing the file's editor. Close Preview puts the file back"
+          ],
+          "default": "beside",
+          "markdownDescription": "Where the preview opens."
         }
       }
     }
   },
   "scripts": {
+    "prepare": "node scripts/install-hooks.js",
     "vscode:prepublish": "npm run package-build",
     "compile": "npm run check-types && npm run lint",
     "check-types": "tsc --noEmit",
@@ -466,7 +515,7 @@
     "typescript": "^4.9.4"
   },
   "dependencies": {
-    "@puppeteer/browsers": "^2.13.2",
+    "@puppeteer/browsers": "^3.2.0",
     "@vscode/markdown-it-katex": "^1.1.2",
     "highlight.js": "^11.7.0",
     "html2pdf.js": "^0.14.0",
@@ -481,6 +530,7 @@
     "puppeteer-core": "^21.11.0"
   },
   "overrides": {
+    "@puppeteer/browsers": "^3.2.0",
     "diff": "^8.0.4",
     "serialize-javascript": "^7.1.0",
     "tar-fs": "^3.1.1",
